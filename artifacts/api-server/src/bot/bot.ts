@@ -59,6 +59,7 @@ const DONUTSMP_API_KEY = process.env["DONUTSMP_API_KEY"];
 const ONLINE_COLOR = 0x57f287;
 const OFFLINE_COLOR = 0xed4245;
 const CLAIM_HOURS = 12;
+const BLACKLISTED_ROLE_ID = "1518639268925407373";
 
 let _client: Client | null = null;
 
@@ -123,16 +124,14 @@ function doublePrize(prize: string): string {
 function buildGiveawayEmbed(gw: GiveawayEntry): EmbedBuilder {
   const endTs = Math.floor(new Date(gw.endTime).getTime() / 1000);
   const winnerLabel = gw.winnersCount === 1 ? "Winner" : "Winners";
-  let desc = `> React with 🎉 to enter!\n\n`;
-  desc += `⏱️ **Ends:** <t:${endTs}:R>\n`;
-  desc += `📅 **Date:** <t:${endTs}:f>\n`;
-  desc += `🏆 **${winnerLabel}:** ${gw.winnersCount}\n`;
-  desc += `🎟️ **Entries:** ${gw.entries.length}\n`;
-  desc += `👑 **Hosted by:** <@${gw.hostId}>`;
+  let desc = `**Ends:** <t:${endTs}:R> (<t:${endTs}:f>)\n`;
+  desc += `**${winnerLabel}:** ${gw.winnersCount}\n`;
+  desc += `**Entries:** ${gw.entries.length}\n`;
+  desc += `**Hosted by:** <@${gw.hostId}>`;
   if (gw.description) desc += `\n\n${gw.description}`;
   return new EmbedBuilder()
     .setColor(0xf47bff)
-    .setTitle(`🎉 ${gw.prize}`)
+    .setTitle(gw.prize)
     .setDescription(desc)
     .setFooter({ text: `Giveaway • ID: ${gw.id}` })
     .setTimestamp(new Date(gw.endTime));
@@ -143,14 +142,14 @@ function buildGiveawayEndedEmbed(gw: GiveawayEntry): EmbedBuilder {
   const winnersStr =
     gw.winners.length > 0 ? gw.winners.map((id) => `<@${id}>`).join(", ") : "No winners";
   const winnerLabel = gw.winnersCount === 1 ? "Winner" : "Winners";
-  let desc = `🎉 **${winnerLabel}:** ${winnersStr}\n\n`;
-  desc += `⏱️ **Ended:** <t:${endTs}:R>\n`;
-  desc += `🎟️ **Total Entries:** ${gw.entries.length}\n`;
-  desc += `👑 **Hosted by:** <@${gw.hostId}>`;
+  let desc = `**${winnerLabel}:** ${winnersStr}\n\n`;
+  desc += `**Ended:** <t:${endTs}:R>\n`;
+  desc += `**Total Entries:** ${gw.entries.length}\n`;
+  desc += `**Hosted by:** <@${gw.hostId}>`;
   if (gw.description) desc += `\n\n${gw.description}`;
   return new EmbedBuilder()
     .setColor(0x747f8d)
-    .setTitle(`🎉 ${gw.prize} — Ended`)
+    .setTitle(`${gw.prize} — Ended`)
     .setDescription(desc)
     .setFooter({ text: `Giveaway • ID: ${gw.id}` })
     .setTimestamp(new Date(gw.endTime));
@@ -874,11 +873,16 @@ async function handleButton(i: ButtonInteraction) {
     const gwId = customId.slice("giveaway_enter_".length);
     const gw = storage.getGiveaway(gwId);
     if (!gw) {
-      await i.reply({ embeds: [errEmbed("❌ Giveaway not found. It may have been deleted.")], flags: 64 });
+      await i.reply({ embeds: [errEmbed("Giveaway not found. It may have been deleted.")], flags: 64 });
       return;
     }
     if (gw.ended) {
-      await i.reply({ embeds: [errEmbed("⏰ This giveaway has already ended.")], flags: 64 });
+      await i.reply({ embeds: [errEmbed("This giveaway has already ended.")], flags: 64 });
+      return;
+    }
+    const member = i.member as GuildMember | null;
+    if (member?.roles.cache.has(BLACKLISTED_ROLE_ID)) {
+      await i.reply({ embeds: [errEmbed("You are not allowed to enter giveaways.")], flags: 64 });
       return;
     }
     const alreadyIn = gw.entries.includes(user.id);
@@ -952,6 +956,11 @@ async function handleButton(i: ButtonInteraction) {
     const gw = storage.getGiveaway(gwId);
 
     if (!gw) { await i.reply({ embeds: [errEmbed("Giveaway not found.")], flags: 64 }); return; }
+    const claimMember = i.member as GuildMember | null;
+    if (claimMember?.roles.cache.has(BLACKLISTED_ROLE_ID)) {
+      await i.reply({ embeds: [errEmbed("You are not allowed to claim giveaway prizes.")], flags: 64 });
+      return;
+    }
     if (user.id !== winnerId) {
       await i.reply({ embeds: [errEmbed("Only the winner can claim this prize.")], flags: 64 }); return;
     }

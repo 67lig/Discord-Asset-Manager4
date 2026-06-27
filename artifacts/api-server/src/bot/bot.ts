@@ -1066,9 +1066,10 @@ async function handleButton(i: ButtonInteraction) {
     }
 
     const ticketNum = storage.nextTicketNumber();
-    const safeName = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+    const safeName = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16) || "user";
+    const safePrize = gw.prize.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16) || "prize";
     const ticketChannel = await guild.channels.create({
-      name: `giveaway-${safeName}`,
+      name: `giveaway-${safeName}-${safePrize}`,
       type: ChannelType.GuildText,
       parent: claimCategory.id,
       topic: `Giveaway Claim | ${gw.prize} | ${user.tag}`,

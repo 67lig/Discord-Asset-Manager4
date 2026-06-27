@@ -54,10 +54,7 @@ import {
 import { storage, type GiveawayEntry } from "./storage.js";
 
 const TOKEN = process.env["DISCORD_BOT_TOKEN"];
-if (!TOKEN) throw new Error("DISCORD_BOT_TOKEN is required");
-
 const DONUTSMP_API_KEY = process.env["DONUTSMP_API_KEY"];
-if (!DONUTSMP_API_KEY) throw new Error("DONUTSMP_API_KEY is required");
 
 const ONLINE_COLOR = 0x57f287;
 const OFFLINE_COLOR = 0xed4245;
@@ -82,7 +79,6 @@ function fmtPlaytime(seconds: number): string {
   return `${d}d ${h}h ${m}m`;
 }
 
-const FOOTER = { text: "V3 Bot" };
 
 function ticketTag(n: number) {
   return `#${String(n).padStart(4, "0")}`;
@@ -126,13 +122,19 @@ function doublePrize(prize: string): string {
 
 function buildGiveawayEmbed(gw: GiveawayEntry): EmbedBuilder {
   const endTs = Math.floor(new Date(gw.endTime).getTime() / 1000);
-  let desc = `Ends: <t:${endTs}:R> (<t:${endTs}:f>)\nHosted by: <@${gw.hostId}>\nEntries: **${gw.entries.length}**\nWinners: **${gw.winnersCount}**`;
+  const winnerLabel = gw.winnersCount === 1 ? "Winner" : "Winners";
+  let desc = `> React with 🎉 to enter!\n\n`;
+  desc += `⏱️ **Ends:** <t:${endTs}:R>\n`;
+  desc += `📅 **Date:** <t:${endTs}:f>\n`;
+  desc += `🏆 **${winnerLabel}:** ${gw.winnersCount}\n`;
+  desc += `🎟️ **Entries:** ${gw.entries.length}\n`;
+  desc += `👑 **Hosted by:** <@${gw.hostId}>`;
   if (gw.description) desc += `\n\n${gw.description}`;
   return new EmbedBuilder()
-    .setColor(BOT_COLOR)
-    .setTitle(gw.prize)
+    .setColor(0xf47bff)
+    .setTitle(`🎉 ${gw.prize}`)
     .setDescription(desc)
-    .setFooter({ text: `V3 Bot • ID: ${gw.id}` })
+    .setFooter({ text: `Giveaway • ID: ${gw.id}` })
     .setTimestamp(new Date(gw.endTime));
 }
 
@@ -140,13 +142,17 @@ function buildGiveawayEndedEmbed(gw: GiveawayEntry): EmbedBuilder {
   const endTs = Math.floor(new Date(gw.endTime).getTime() / 1000);
   const winnersStr =
     gw.winners.length > 0 ? gw.winners.map((id) => `<@${id}>`).join(", ") : "No winners";
-  let desc = `Ended: <t:${endTs}:R>\nHosted by: <@${gw.hostId}>\nEntries: **${gw.entries.length}**\nWinners: ${winnersStr}`;
+  const winnerLabel = gw.winnersCount === 1 ? "Winner" : "Winners";
+  let desc = `🎉 **${winnerLabel}:** ${winnersStr}\n\n`;
+  desc += `⏱️ **Ended:** <t:${endTs}:R>\n`;
+  desc += `🎟️ **Total Entries:** ${gw.entries.length}\n`;
+  desc += `👑 **Hosted by:** <@${gw.hostId}>`;
   if (gw.description) desc += `\n\n${gw.description}`;
   return new EmbedBuilder()
-    .setColor(0x95a5a6)
-    .setTitle(`${gw.prize} (Ended)`)
+    .setColor(0x747f8d)
+    .setTitle(`🎉 ${gw.prize} — Ended`)
     .setDescription(desc)
-    .setFooter({ text: `V3 Bot • ID: ${gw.id}` })
+    .setFooter({ text: `Giveaway • ID: ${gw.id}` })
     .setTimestamp(new Date(gw.endTime));
 }
 
@@ -201,7 +207,7 @@ async function endGiveaway(gw: GiveawayEntry) {
           new EmbedBuilder()
             .setColor(ERROR_COLOR)
             .setDescription(`Giveaway for **${gw.prize}** ended with no entries.`)
-            .setFooter(FOOTER),
+            ,
         ],
         reply: { messageReference: gw.messageId, failIfNotExists: false },
       })
@@ -298,7 +304,15 @@ async function expireGiveawayClaims(giveawayId: string) {
 
 // ─── Bot Client ────────────────────────────────────────────────────────────
 
-export function createBotClient(): Client {
+export function createBotClient(): Client | null {
+  if (!TOKEN) {
+    logger.warn("DISCORD_BOT_TOKEN not set — bot disabled. Set the secret to enable it.");
+    return null;
+  }
+  if (!DONUTSMP_API_KEY) {
+    logger.warn("DONUTSMP_API_KEY not set — /stats command will not work.");
+  }
+
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -526,7 +540,7 @@ async function closeTicket(
       { name: "👤 Claimed By",   value: ticket.claimedById ? `<@${ticket.claimedById}>` : "Not claimed", inline: true },
       { name: "❓ Reason",       value: reason },
     )
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 
   const showTranscriptBtn = new ButtonBuilder()
@@ -796,7 +810,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
               return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> — ${cat?.label ?? t.categoryId} — <@${t.userId}>`;
             }).join("\n"),
       )
-      .setFooter(FOOTER)
+      
       .setTimestamp();
     await i.reply({ embeds: [embed], flags: 64 });
     return;
@@ -859,8 +873,12 @@ async function handleButton(i: ButtonInteraction) {
   if (customId.startsWith("giveaway_enter_")) {
     const gwId = customId.slice("giveaway_enter_".length);
     const gw = storage.getGiveaway(gwId);
-    if (!gw || gw.ended) {
-      await i.reply({ embeds: [errEmbed("This giveaway has ended.")], flags: 64 });
+    if (!gw) {
+      await i.reply({ embeds: [errEmbed("❌ Giveaway not found. It may have been deleted.")], flags: 64 });
+      return;
+    }
+    if (gw.ended) {
+      await i.reply({ embeds: [errEmbed("⏰ This giveaway has already ended.")], flags: 64 });
       return;
     }
     const alreadyIn = gw.entries.includes(user.id);
@@ -1028,7 +1046,7 @@ async function handleButton(i: ButtonInteraction) {
           ? [{ name: "⏰ Claim Expires", value: `<t:${claimExpiry}:R>`, inline: true }]
           : []),
       )
-      .setFooter(FOOTER)
+      
       .setTimestamp();
 
     await ticketChannel.send({
@@ -1063,7 +1081,7 @@ async function handleButton(i: ButtonInteraction) {
           { name: "🎲 ID",         value: `\`${gw.id}\``,  inline: true },
           { name: "Staff In Ticket", value: "0",           inline: true },
         )
-        .setFooter(FOOTER)
+        
         .setTimestamp();
       await logCh.send({
         embeds: [joinEmbed],
@@ -1083,7 +1101,7 @@ async function handleButton(i: ButtonInteraction) {
         new EmbedBuilder()
           .setColor(SUCCESS_COLOR)
           .setDescription(`Your claim ticket has been created: <#${ticketChannel.id}>`)
-          .setFooter(FOOTER),
+          ,
       ],
     });
     return;
@@ -1176,7 +1194,7 @@ async function handleButton(i: ButtonInteraction) {
           new EmbedBuilder()
             .setColor(SUCCESS_COLOR)
             .setDescription(`✅ **<@${user.id}> has accepted this farm request.**\nBuilders can now claim this ticket.`)
-            .setFooter(FOOTER)
+            
             .setTimestamp(),
         ],
         components: [
@@ -1289,7 +1307,7 @@ async function handleButton(i: ButtonInteraction) {
           { name: "Owner", value: `<@${g.ownerId}>`, inline: true },
           { name: "Created", value: `<t:${Math.floor(g.createdTimestamp / 1000)}:R>`, inline: true },
         )
-        .setFooter(FOOTER)
+        
         .setTimestamp();
       await i.update({ embeds: [embed], components: [backRow("panel_back")] }); return;
     }
@@ -1298,8 +1316,7 @@ async function handleButton(i: ButtonInteraction) {
       const embed = new EmbedBuilder()
         .setColor(BOT_COLOR)
         .setTitle("Ticket Panel")
-        .setDescription("Manage the ticket system. Send the ticket panel, edit category messages, or view active tickets.")
-        .setFooter(FOOTER);
+        .setDescription("Manage the ticket system. Send the ticket panel, edit category messages, or view active tickets.");
       await i.update({
         embeds: [embed],
         components: [
@@ -1322,8 +1339,7 @@ async function handleButton(i: ButtonInteraction) {
         .addFields(
           { name: "Description", value: data.farmDescription.slice(0, 900) },
           { name: "Farm List", value: data.farmList.slice(0, 900) },
-        )
-        .setFooter(FOOTER);
+        );
       await i.update({
         embeds: [embed],
         components: [
@@ -1340,8 +1356,9 @@ async function handleButton(i: ButtonInteraction) {
 
     case "t_send": {
       if (!i.channel) return;
+      await i.deferUpdate();
       await (i.channel as TextChannel).send({ embeds: [ticketPanelEmbed()], components: ticketPanelComponents() });
-      await i.update({ embeds: [okEmbed(`Ticket panel sent here.`)], components: [backRow("panel_tickets")] });
+      await i.editReply({ embeds: [okEmbed(`✅ Ticket panel sent to this channel.`)], components: [backRow("panel_tickets")] });
       return;
     }
 
@@ -1351,7 +1368,7 @@ async function handleButton(i: ButtonInteraction) {
       );
       const sel = new StringSelectMenuBuilder().setCustomId("sel_edit_cat").setPlaceholder("Choose a category").addOptions(options);
       await i.update({
-        embeds: [new EmbedBuilder().setColor(BOT_COLOR).setTitle("Edit Category Messages").setDescription("Select a category to edit its welcome message.").setFooter(FOOTER)],
+        embeds: [new EmbedBuilder().setColor(BOT_COLOR).setTitle("Edit Category Messages").setDescription("Select a category to edit its welcome message.")],
         components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(sel), backRow("panel_tickets")],
       }); return;
     }
@@ -1384,22 +1401,24 @@ async function handleButton(i: ButtonInteraction) {
                 return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> — ${cat?.label ?? t.categoryId} — <@${t.userId}> — <t:${Math.floor(new Date(t.createdAt).getTime() / 1000)}:R>`;
               }).join("\n"),
         )
-        .setFooter(FOOTER)
+        
         .setTimestamp();
       await i.update({ embeds: [embed], components: [backRow("panel_tickets")] }); return;
     }
 
     case "f_send_panel": {
       if (!i.channel) return;
+      await i.deferUpdate();
       await (i.channel as TextChannel).send({ embeds: [farmTicketPanelEmbed()], components: farmTicketComponents() });
-      await i.update({ embeds: [okEmbed("Farm ticket panel sent here.")], components: [backRow("panel_farms")] });
+      await i.editReply({ embeds: [okEmbed("✅ Farm ticket panel sent to this channel.")], components: [backRow("panel_farms")] });
       return;
     }
 
     case "f_send_info": {
       if (!i.channel) return;
+      await i.deferUpdate();
       await (i.channel as TextChannel).send({ embeds: [farmInfoEmbed()] });
-      await i.update({ embeds: [okEmbed("Farm info sent here.")], components: [backRow("panel_farms")] });
+      await i.editReply({ embeds: [okEmbed("✅ Farm info sent to this channel.")], components: [backRow("panel_farms")] });
       return;
     }
 
@@ -1453,7 +1472,7 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
           .setColor(GOLD_COLOR)
           .setTitle("Buy Farms — Schematic Type")
           .setDescription("Will you be using a **server schematic** or providing a **custom schematic**?")
-          .setFooter(FOOTER),
+          ,
       ],
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(sel)],
       flags: 64,
@@ -1606,7 +1625,7 @@ async function handleModal(i: ModalSubmitInteraction) {
         new EmbedBuilder()
           .setColor(SUCCESS_COLOR)
           .setDescription(`✅ Giveaway created in <#${i.channel.id}>!\n\nPrize: **${prize}** | Winners: **${winnersCount}** | ID: \`${gwId}\``)
-          .setFooter(FOOTER),
+          ,
       ],
     });
     return;
@@ -1623,7 +1642,7 @@ async function handleModal(i: ModalSubmitInteraction) {
     const existingId = storage.hasOpenTicket(user.id, "buy-farms", guild.id);
     if (existingId && guild.channels.cache.get(existingId)) {
       await i.reply({
-        embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open farm ticket: <#${existingId}>`).setFooter(FOOTER)],
+        embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open farm ticket: <#${existingId}>`)],
         flags: 64,
       });
       return;
@@ -1686,7 +1705,7 @@ async function handleModal(i: ModalSubmitInteraction) {
       .setTitle(`Buy Farms — ${ticketTag(ticketNum)}`)
       .setDescription(customMsg)
       .addFields(...welcomeFields)
-      .setFooter(FOOTER)
+      
       .setTimestamp();
 
     const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -1724,7 +1743,7 @@ async function handleModal(i: ModalSubmitInteraction) {
           ...(isCustom && budget ? [{ name: "Budget", value: budget, inline: true }] : []),
           { name: "Staff In Ticket", value: "0",              inline: true },
         )
-        .setFooter(FOOTER)
+        
         .setTimestamp();
       await logCh.send({
         embeds: [joinEmbed],
@@ -1743,7 +1762,7 @@ async function handleModal(i: ModalSubmitInteraction) {
           .setTitle("Farm Ticket Created")
           .setDescription(`Your farm ticket has been created: <#${ticketChannel.id}>`)
           .addFields({ name: "Ticket Number", value: ticketTag(ticketNum), inline: true })
-          .setFooter(FOOTER),
+          ,
       ],
     });
     return;
@@ -1756,7 +1775,7 @@ async function handleModal(i: ModalSubmitInteraction) {
         new EmbedBuilder()
           .setColor(GOLD_COLOR)
           .setDescription(`<@${user.id}> updated the farm price to: **${newPrice}**`)
-          .setFooter(FOOTER)
+          
           .setTimestamp(),
       ],
     });
@@ -1828,7 +1847,7 @@ async function handleTicketCreate(
         new EmbedBuilder()
           .setColor(WARNING_COLOR)
           .setDescription(`You already have an open **${cat.label}** ticket: <#${existingId}>`)
-          .setFooter(FOOTER),
+          ,
       ],
     });
     return;
@@ -1889,7 +1908,7 @@ async function handleTicketCreate(
       { name: "Ticket", value: ticketTag(ticketNum), inline: true },
       { name: "Opened", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
     )
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 
   const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -1920,7 +1939,7 @@ async function handleTicketCreate(
         { name: "🔵 Panel",         value: cat.label,       inline: true },
         { name: "👤 Staff In Ticket", value: "0",           inline: true },
       )
-      .setFooter(FOOTER)
+      
       .setTimestamp();
 
     const joinRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -1940,7 +1959,7 @@ async function handleTicketCreate(
         .setTitle("Ticket Created")
         .setDescription(`Your **${cat.label}** ticket has been created: <#${ticketChannel.id}>`)
         .addFields({ name: "Ticket Number", value: ticketTag(ticketNum), inline: true })
-        .setFooter(FOOTER),
+        ,
     ],
   });
 }
@@ -1961,7 +1980,7 @@ function panelEmbed() {
       { name: "Ticket Panel", value: "Manage the ticket system", inline: true },
       { name: "Farm Panel", value: "Manage farm listings", inline: true },
     )
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 }
 
@@ -1978,7 +1997,7 @@ function ticketPanelEmbed() {
   const embed = new EmbedBuilder()
     .setColor(BOT_COLOR)
     .setTitle(data.ticketPanelTitle)
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 
   let desc = data.ticketPanelDesc ? data.ticketPanelDesc + "\n\n" : "";
@@ -2008,7 +2027,7 @@ function farmTicketPanelEmbed() {
     .setColor(GOLD_COLOR)
     .setTitle("Buy Farms")
     .setDescription(`**${FARM_CATEGORY.label}** – ${desc}\n\n${data.farmList}`)
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 }
 
@@ -2032,16 +2051,17 @@ function farmInfoEmbed() {
     .setTitle("Buy Farms")
     .setDescription(data.farmDescription)
     .addFields({ name: "Available Farms", value: data.farmList.slice(0, 1024) })
-    .setFooter(FOOTER)
+    
     .setTimestamp();
 }
 
 function okEmbed(msg: string) {
-  return new EmbedBuilder().setColor(SUCCESS_COLOR).setDescription(msg).setFooter(FOOTER);
+  return new EmbedBuilder().setColor(SUCCESS_COLOR).setDescription(msg);
 }
 function errEmbed(msg: string) {
-  return new EmbedBuilder().setColor(ERROR_COLOR).setDescription(msg).setFooter(FOOTER);
+  return new EmbedBuilder().setColor(ERROR_COLOR).setDescription(msg);
 }
 function infoEmbed(msg: string) {
-  return new EmbedBuilder().setColor(BOT_COLOR).setDescription(msg).setFooter(FOOTER);
+  return new EmbedBuilder().setColor(BOT_COLOR).setDescription(msg);
 }
+

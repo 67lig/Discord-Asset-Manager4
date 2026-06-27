@@ -1458,7 +1458,7 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
       .setPlaceholder("Choose a schematic type")
       .addOptions(
         new StringSelectMenuOptionBuilder()
-          .setLabel("Server Schematic")
+          .setLabel("Which one?")
           .setValue("server")
           .setDescription("Use one of our pre-made server schematics"),
         new StringSelectMenuOptionBuilder()

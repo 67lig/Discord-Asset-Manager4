@@ -64,16 +64,35 @@ function defaultData(): BotData {
 }
 
 function loadData(): BotData {
+  if (!fs.existsSync(DATA_FILE)) return defaultData();
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      return { ...defaultData(), ...JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) };
+    const raw = fs.readFileSync(DATA_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Partial<BotData>;
+    return { ...defaultData(), ...parsed };
+  } catch (err) {
+    console.error("[storage] Failed to parse bot-data.json — attempting backup restore:", err);
+    const backup = DATA_FILE + ".bak";
+    if (fs.existsSync(backup)) {
+      try {
+        const raw = fs.readFileSync(backup, "utf8");
+        const parsed = JSON.parse(raw) as Partial<BotData>;
+        console.error("[storage] Restored from backup successfully.");
+        return { ...defaultData(), ...parsed };
+      } catch {
+        console.error("[storage] Backup also unreadable — starting with empty data.");
+      }
     }
-  } catch {}
-  return defaultData();
+    return defaultData();
+  }
 }
 
 function saveData(data: BotData): void {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  const json = JSON.stringify(data, null, 2);
+  const tmp = DATA_FILE + ".tmp";
+  fs.writeFileSync(tmp, json, "utf8");
+  fs.renameSync(tmp, DATA_FILE);
+  // Keep a backup copy one write behind for safety
+  try { fs.copyFileSync(DATA_FILE, DATA_FILE + ".bak"); } catch {}
 }
 
 let _data = loadData();

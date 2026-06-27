@@ -204,6 +204,24 @@
       "claimExpiry": null,
       "winMessages": {},
       "type": "simple"
+    },
+    "n0u87751xo": {
+      "id": "n0u87751xo",
+      "guildId": "1450662191890956322",
+      "channelId": "1450662193266692290",
+      "messageId": "1520315768879841293",
+      "hostId": "1491457883219693720",
+      "prize": "1m",
+      "description": "",
+      "winnersCount": 1,
+      "endTime": "2026-06-27T06:32:10.269Z",
+      "entries": [],
+      "ended": true,
+      "winners": [],
+      "claimedBy": [],
+      "claimExpiry": null,
+      "winMessages": {},
+      "type": "normal"
     }
   }
 }

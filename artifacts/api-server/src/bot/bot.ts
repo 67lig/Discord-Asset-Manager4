@@ -408,6 +408,14 @@ async function registerCommands(client: Client) {
           .addStringOption((opt) =>
             opt.setName("id").setDescription("Giveaway ID").setRequired(true),
           ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("info")
+          .setDescription("Look up full details of a giveaway by ID")
+          .addStringOption((opt) =>
+            opt.setName("id").setDescription("Giveaway ID").setRequired(true),
+          ),
       ),
   ].map((c) => c.toJSON());
 
@@ -734,6 +742,51 @@ async function handleCommand(i: ChatInputCommandInteraction) {
         ),
       );
       await i.showModal(modal);
+      return;
+    }
+
+    if (sub === "info") {
+      const member = i.member as GuildMember;
+      if (!canManageGiveaway(member)) {
+        await i.reply({ embeds: [errEmbed("You need the Giveaway Manager role to look up giveaways.")], flags: 64 });
+        return;
+      }
+      const gwId = i.options.getString("id", true).trim();
+      const gw = storage.getGiveaway(gwId);
+      if (!gw) {
+        await i.reply({ embeds: [errEmbed(`No giveaway found with ID \`${gwId}\`.`)], flags: 64 });
+        return;
+      }
+
+      const endTs = Math.floor(new Date(gw.endTime).getTime() / 1000);
+      const status = gw.ended ? "Ended" : "Active";
+      const statusColor = gw.ended ? 0x747f8d : 0xf47bff;
+      const typeLabel = gw.type === "simple" ? "Simple (no claim)" : gw.type === "double" ? "Double (gamble)" : "Normal";
+      const winnersStr = gw.winners.length > 0 ? gw.winners.map((id) => `<@${id}>`).join(", ") : "None yet";
+      const claimedStr = gw.claimedBy.length > 0 ? gw.claimedBy.map((id) => `<@${id}>`).join(", ") : "None";
+      const entriesStr = gw.entries.length > 0
+        ? gw.entries.slice(0, 30).map((id) => `<@${id}>`).join(", ") + (gw.entries.length > 30 ? ` + ${gw.entries.length - 30} more` : "")
+        : "No entries";
+
+      const embed = new EmbedBuilder()
+        .setColor(statusColor)
+        .setTitle(`${gw.prize}`)
+        .addFields(
+          { name: "Status",    value: status,                              inline: true },
+          { name: "Type",      value: typeLabel,                           inline: true },
+          { name: "Winners",   value: `${gw.winnersCount}`,               inline: true },
+          { name: "Hosted by", value: `<@${gw.hostId}>`,                  inline: true },
+          { name: "Ends",      value: `<t:${endTs}:f> (<t:${endTs}:R>)`, inline: true },
+          { name: "Channel",   value: `<#${gw.channelId}>`,               inline: true },
+          { name: `Entries (${gw.entries.length})`, value: entriesStr },
+          { name: `Winners (${gw.winners.length})`, value: winnersStr,    inline: true },
+          { name: `Claimed (${gw.claimedBy.length})`, value: claimedStr,  inline: true },
+          ...(gw.description ? [{ name: "Description", value: gw.description }] : []),
+        )
+        .setFooter({ text: `Giveaway ID: ${gw.id}` })
+        .setTimestamp();
+
+      await i.reply({ embeds: [embed], flags: 64 });
       return;
     }
 

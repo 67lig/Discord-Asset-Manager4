@@ -174,12 +174,36 @@
       "winners": [
         "1491457883219693720"
       ],
-      "claimedBy": [],
+      "claimedBy": [
+        "1491457883219693720"
+      ],
       "claimExpiry": "2026-06-27T18:23:22.560Z",
       "winMessages": {
         "1491457883219693720": "1520313576424734791"
       },
       "type": "double"
+    },
+    "yvajdj496q": {
+      "id": "yvajdj496q",
+      "guildId": "1450662191890956322",
+      "channelId": "1450662193266692290",
+      "messageId": "1520314221886439455",
+      "hostId": "1491457883219693720",
+      "prize": "20m",
+      "description": "",
+      "winnersCount": 1,
+      "endTime": "2026-06-27T06:26:26.416Z",
+      "entries": [
+        "1491457883219693720"
+      ],
+      "ended": true,
+      "winners": [
+        "1491457883219693720"
+      ],
+      "claimedBy": [],
+      "claimExpiry": null,
+      "winMessages": {},
+      "type": "simple"
     }
   }
 }

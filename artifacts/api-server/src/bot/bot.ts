@@ -220,7 +220,7 @@ async function endGiveaway(gw: GiveawayEntry) {
     for (const winnerId of winners) {
       await ch
         .send({
-          content: `Congratulations <@${winnerId}>, you won **${gw.prize}**! Thanks for participating!`,
+          content: `Congratulations <@${winnerId}>, you won **${gw.prize}**!`,
           reply: { messageReference: gw.messageId, failIfNotExists: false },
         })
         .catch(() => {});
@@ -904,7 +904,7 @@ async function handleButton(i: ButtonInteraction) {
           const msg = await (i.channel as TextChannel).messages.fetch(gw.messageId);
           await msg.edit({ embeds: [buildGiveawayEmbed(updated)], components: msg.components as never });
         } catch {}
-        await i.reply({ embeds: [okEmbed("🎉 You have entered the giveaway! Click again to leave.")], flags: 64 });
+        await i.reply({ embeds: [okEmbed("You have entered the giveaway! Click again to leave.")], flags: 64 });
       }
     }
     return;

@@ -50,6 +50,15 @@ export const REGULAR_CATEGORIES: TicketCategory[] = [
     channelPrefix: "skellys",
     discordCategoryName: "Skelly Tickets",
   },
+  {
+    id: "giveaway",
+    label: "Giveaway",
+    description:
+      "For giveaway-related questions, issues with entering or claiming prizes, or any concerns about a giveaway. Please include the Giveaway ID if applicable.",
+    color: 0xf47bff,
+    channelPrefix: "giveaway",
+    discordCategoryName: "Giveaway Support Tickets",
+  },
 ];
 
 export const FARM_CATEGORY: TicketCategory = {

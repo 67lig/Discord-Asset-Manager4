@@ -54,8 +54,9 @@ import {
   SKELLY_CATEGORY,
   GENERAL_TICKET_ROLE_ID,
   SKELLY_TICKET_ROLE_ID,
+  OWNER_ROLE_ID,
 } from "./config.js";
-import { storage, type GiveawayEntry } from "./storage.js";
+import { storage, type GiveawayEntry, type WarnEntry } from "./storage.js";
 
 const TOKEN = process.env["DISCORD_BOT_TOKEN"];
 const DONUTSMP_API_KEY = process.env["DONUTSMP_API_KEY"];
@@ -361,15 +362,138 @@ export function createBotClient(): Client | null {
 
   // ─── Vouch Channel Format Enforcer ─────────────────────────────────────────
   const VOUCH_CHANNEL_ID = "1503988954490470461";
-  // Valid: (scam vouch|scamvouch|vouch) @mention <reason>
   const VOUCH_REGEX = /^(scam\s*vouch|vouch)\s+<@!?\d+>\s+\S+/i;
 
-  // Per-channel cooldown so we don't spam repost if multiple messages arrive fast
+  // Per-channel sticky repost cooldown
   const stickyBusy = new Set<string>();
 
+  // ─── Welcome Channels ────────────────────────────────────────────────────
+  const WELCOME_RULES_CH   = "1450662193266692286";
+  const WELCOME_GIVEAWAY_1 = "1450662193266692288";
+  const WELCOME_GIVEAWAY_2 = "1450662193266692290";
+  const WELCOME_GIVEAWAY_3 = "1496946833757311082";
+
+  client.on("guildMemberAdd", async (member) => {
+    const welcomeChannelId = storage.getWelcomeChannelId();
+    const ch = (welcomeChannelId
+      ? member.guild.channels.cache.get(welcomeChannelId)
+      : member.guild.systemChannel) as TextChannel | null;
+    if (!ch) return;
+    const embed = new EmbedBuilder()
+      .setColor(BOT_COLOR)
+      .setAuthor({ name: member.guild.name, iconURL: member.guild.iconURL() ?? undefined })
+      .setTitle("Welcome To V3 Sanctuary")
+      .setDescription(
+        `Please read the rules <#${WELCOME_RULES_CH}>.\nAfter reading, feel free to look at the channels below.\n\nFor giveaways and official trade opportunities, visit:\n<#${WELCOME_GIVEAWAY_1}>\n<#${WELCOME_GIVEAWAY_2}>\n<#${WELCOME_GIVEAWAY_3}>`,
+      )
+      .setThumbnail(member.user.displayAvatarURL())
+      .setTimestamp();
+    await ch.send({ content: `<@${member.id}>`, embeds: [embed] }).catch(() => {});
+  });
+
   client.on("messageCreate", (msg) => {
+    if (msg.author.bot) return;
+
+    // ── !-prefix message commands ──
+    if (msg.content.startsWith("!")) {
+      void (async () => {
+        const args = msg.content.slice(1).trim().split(/\s+/);
+        const cmd  = args[0]?.toLowerCase();
+        if (!cmd) return;
+        const guild  = msg.guild;
+        const member = guild?.members.cache.get(msg.author.id);
+
+        if (cmd === "members") {
+          if (!guild) return;
+          const g = await guild.fetch();
+          await g.members.fetch().catch(() => {});
+          const online = g.members.cache.filter((m) => m.presence?.status !== "offline" && !!m.presence?.status).size;
+          const bots   = g.members.cache.filter((m) => m.user.bot).size;
+          const humans = g.memberCount - bots;
+          await msg.reply({
+            embeds: [new EmbedBuilder().setColor(BOT_COLOR).setTitle(`👥 Members — ${g.name}`).addFields(
+              { name: "Total",  value: `${g.memberCount}`, inline: true },
+              { name: "Humans", value: `${humans}`,         inline: true },
+              { name: "Bots",   value: `${bots}`,           inline: true },
+              { name: "Online", value: `${online || "N/A"}`, inline: true },
+            ).setTimestamp()],
+          }).catch(() => {});
+          return;
+        }
+
+        if (cmd === "warns") {
+          const targetId = msg.mentions.users.first()?.id ?? args[1];
+          if (!targetId) { await msg.reply({ embeds: [errEmbed("Usage: `!warns @user`")] }).catch(() => {}); return; }
+          const target = await msg.client.users.fetch(targetId).catch(() => null);
+          const warns = storage.getWarns(targetId);
+          const color = warns.length >= 5 ? ERROR_COLOR : warns.length >= 3 ? WARNING_COLOR : BOT_COLOR;
+          await msg.reply({
+            embeds: [new EmbedBuilder().setColor(color)
+              .setTitle(`Warnings: ${target?.username ?? targetId}`)
+              .setDescription(warns.length === 0 ? "No warnings." : warns.map((w, idx) => `**${idx + 1}.** ${w.reason}\n> by <@${w.moderatorId}> — <t:${Math.floor(new Date(w.timestamp).getTime() / 1000)}:R>`).join("\n\n"))
+              .setFooter({ text: `${warns.length} / 5 warnings` }).setTimestamp()],
+          }).catch(() => {});
+          return;
+        }
+
+        if (!member || !isStaff(member)) return;
+
+        if (cmd === "warn") {
+          const targetId = msg.mentions.users.first()?.id;
+          if (!targetId) { await msg.reply({ embeds: [errEmbed("Usage: `!warn @user reason`")] }).catch(() => {}); return; }
+          const reason = args.slice(2).join(" ").trim() || "No reason provided";
+          const warn: WarnEntry = { userId: targetId, reason, moderatorId: msg.author.id, moderatorTag: msg.author.username, timestamp: new Date().toISOString() };
+          const count = storage.addWarn(targetId, warn);
+          await msg.reply({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setTitle("⚠️ Warning Issued")
+            .addFields({ name: "User", value: `<@${targetId}>`, inline: true }, { name: "Moderator", value: `<@${msg.author.id}>`, inline: true }, { name: "Total", value: `**${count} / 5**`, inline: true }, { name: "Reason", value: reason })
+            .setTimestamp()] }).catch(() => {});
+          const target = await msg.client.users.fetch(targetId).catch(() => null);
+          if (target) target.send({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setTitle("⚠️ You have been warned").setDescription(`**Reason:** ${reason}\n**Warnings:** ${count} / 5`).setTimestamp()] }).catch(() => {});
+          if (count >= 5) {
+            const m = guild?.members.cache.get(targetId);
+            if (m?.bannable) await m.ban({ reason: "Auto-ban: 5 warnings reached" }).catch(() => {});
+            await msg.channel.send({ embeds: [new EmbedBuilder().setColor(ERROR_COLOR).setTitle("🔨 Auto-Ban").setDescription(`<@${targetId}> auto-banned for reaching 5 warnings.`).setTimestamp()] }).catch(() => {});
+          }
+          return;
+        }
+
+        if (cmd === "kick") {
+          const targetId = msg.mentions.users.first()?.id;
+          if (!targetId) { await msg.reply({ embeds: [errEmbed("Usage: `!kick @user [reason]`")] }).catch(() => {}); return; }
+          const reason = args.slice(2).join(" ").trim() || "No reason provided";
+          const m = guild?.members.cache.get(targetId);
+          if (!m) { await msg.reply({ embeds: [errEmbed("Member not found.")] }).catch(() => {}); return; }
+          if (!m.kickable) { await msg.reply({ embeds: [errEmbed("I cannot kick this member.")] }).catch(() => {}); return; }
+          await m.kick(reason);
+          await msg.reply({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setTitle("👢 Kicked").addFields({ name: "User", value: `<@${targetId}>`, inline: true }, { name: "Reason", value: reason }).setTimestamp()] }).catch(() => {});
+          return;
+        }
+
+        if (cmd === "ban") {
+          const targetId = msg.mentions.users.first()?.id;
+          if (!targetId) { await msg.reply({ embeds: [errEmbed("Usage: `!ban @user [reason]`")] }).catch(() => {}); return; }
+          const reason = args.slice(2).join(" ").trim() || "No reason provided";
+          const m = guild?.members.cache.get(targetId);
+          if (m && !m.bannable) { await msg.reply({ embeds: [errEmbed("I cannot ban this member.")] }).catch(() => {}); return; }
+          await guild?.members.ban(targetId, { reason });
+          await msg.reply({ embeds: [new EmbedBuilder().setColor(ERROR_COLOR).setTitle("🔨 Banned").addFields({ name: "User", value: `<@${targetId}>`, inline: true }, { name: "Reason", value: reason }).setTimestamp()] }).catch(() => {});
+          return;
+        }
+
+        if (cmd === "setwelcome") {
+          if (!isOwnerOrCoOwner(member)) return;
+          const chId = msg.mentions.channels.first()?.id;
+          if (!chId) { await msg.reply({ embeds: [errEmbed("Usage: `!setwelcome #channel`")] }).catch(() => {}); return; }
+          storage.setWelcomeChannelId(chId);
+          await msg.reply({ embeds: [okEmbed(`✅ Welcome channel set to <#${chId}>`)] }).catch(() => {});
+          return;
+        }
+      })();
+      return;
+    }
+
     // ── Vouch enforcer ──
-    if (msg.channelId === VOUCH_CHANNEL_ID && !msg.author.bot) {
+    if (msg.channelId === VOUCH_CHANNEL_ID) {
       if (!VOUCH_REGEX.test(msg.content.trim())) {
         msg.delete().catch(() => {});
         msg.author
@@ -385,7 +509,6 @@ export function createBotClient(): Client | null {
     }
 
     // ── Sticky repost ──
-    if (msg.author.bot) return;
     const channelStickers = storage.getStickersForChannel(msg.channelId);
     if (channelStickers.length === 0) return;
     if (stickyBusy.has(msg.channelId)) return;
@@ -499,6 +622,28 @@ async function registerCommands(client: Client) {
       .addSubcommand((sub) =>
         sub.setName("list").setDescription("List all stickers in this channel"),
       ),
+    new SlashCommandBuilder()
+      .setName("warn")
+      .setDescription("Issue a warning to a user (staff only)")
+      .addUserOption((opt) => opt.setName("user").setDescription("User to warn").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("Reason for the warning").setRequired(true)),
+    new SlashCommandBuilder()
+      .setName("warns")
+      .setDescription("View warnings for a user (staff only)")
+      .addUserOption((opt) => opt.setName("user").setDescription("User to check").setRequired(true)),
+    new SlashCommandBuilder()
+      .setName("kick")
+      .setDescription("Kick a member from the server (staff only)")
+      .addUserOption((opt) => opt.setName("user").setDescription("Member to kick").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("Reason for kick").setRequired(false)),
+    new SlashCommandBuilder()
+      .setName("ban")
+      .setDescription("Ban a member from the server (staff only)")
+      .addUserOption((opt) => opt.setName("user").setDescription("Member to ban").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("Reason for ban").setRequired(false)),
+    new SlashCommandBuilder()
+      .setName("members")
+      .setDescription("View server member statistics"),
   ].map((c) => c.toJSON());
 
   try {
@@ -762,6 +907,110 @@ async function handleCommand(i: ChatInputCommandInteraction) {
       .setFooter({ text: `DonutSMP Stats • ${username}` })
       .setTimestamp();
 
+    await i.editReply({ embeds: [embed] });
+    return;
+  }
+
+  if (commandName === "warn") {
+    if (!isStaff(i.member as GuildMember)) {
+      await i.reply({ embeds: [errEmbed("Staff only.")], flags: 64 }); return;
+    }
+    if (!guild) return;
+    const target = i.options.getUser("user", true);
+    const reason = i.options.getString("reason", true);
+    const warn: WarnEntry = { userId: target.id, reason, moderatorId: user.id, moderatorTag: user.username, timestamp: new Date().toISOString() };
+    const count = storage.addWarn(target.id, warn);
+    const warnEmbed = new EmbedBuilder()
+      .setColor(WARNING_COLOR)
+      .setTitle("⚠️ Warning Issued")
+      .addFields(
+        { name: "User",            value: `<@${target.id}>`,   inline: true },
+        { name: "Moderator",       value: `<@${user.id}>`,     inline: true },
+        { name: "Total Warnings",  value: `**${count} / 5**`,  inline: true },
+        { name: "Reason",          value: reason },
+      )
+      .setTimestamp();
+    await i.reply({ embeds: [warnEmbed] });
+    target.send({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setTitle("⚠️ You have been warned").setDescription(`**Reason:** ${reason}\n**Warnings:** ${count} / 5 — Reaching 5 results in an automatic ban.`).setTimestamp()] }).catch(() => {});
+    if (count >= 5) {
+      const m = guild.members.cache.get(target.id);
+      if (m?.bannable) await m.ban({ reason: `Auto-ban: 5 warnings reached` }).catch(() => {});
+      await (channel as TextChannel).send({ embeds: [new EmbedBuilder().setColor(ERROR_COLOR).setTitle("🔨 Auto-Ban").setDescription(`<@${target.id}> has been automatically banned for accumulating 5 warnings.`).setTimestamp()] }).catch(() => {});
+    }
+    return;
+  }
+
+  if (commandName === "warns") {
+    if (!isStaff(i.member as GuildMember)) {
+      await i.reply({ embeds: [errEmbed("Staff only.")], flags: 64 }); return;
+    }
+    const target = i.options.getUser("user", true);
+    const warns = storage.getWarns(target.id);
+    const color = warns.length >= 5 ? ERROR_COLOR : warns.length >= 3 ? WARNING_COLOR : BOT_COLOR;
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`Warnings: ${target.username}`)
+      .setDescription(
+        warns.length === 0
+          ? "No warnings on record."
+          : warns.map((w, idx) => `**${idx + 1}.** ${w.reason}\n> by <@${w.moderatorId}> — <t:${Math.floor(new Date(w.timestamp).getTime() / 1000)}:R>`).join("\n\n"),
+      )
+      .setFooter({ text: `${warns.length} / 5 warnings` })
+      .setTimestamp();
+    await i.reply({ embeds: [embed], flags: 64 });
+    return;
+  }
+
+  if (commandName === "kick") {
+    if (!isStaff(i.member as GuildMember)) {
+      await i.reply({ embeds: [errEmbed("Staff only.")], flags: 64 }); return;
+    }
+    if (!guild) return;
+    const target = i.options.getUser("user", true);
+    const reason = i.options.getString("reason") || "No reason provided";
+    const m = guild.members.cache.get(target.id);
+    if (!m) { await i.reply({ embeds: [errEmbed("Member not found in this server.")], flags: 64 }); return; }
+    if (!m.kickable) { await i.reply({ embeds: [errEmbed("I cannot kick this member.")], flags: 64 }); return; }
+    await i.deferReply();
+    await m.kick(reason);
+    await i.editReply({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setTitle("👢 Member Kicked").addFields({ name: "User", value: `<@${target.id}>`, inline: true }, { name: "Moderator", value: `<@${user.id}>`, inline: true }, { name: "Reason", value: reason }).setTimestamp()] });
+    return;
+  }
+
+  if (commandName === "ban") {
+    if (!isStaff(i.member as GuildMember)) {
+      await i.reply({ embeds: [errEmbed("Staff only.")], flags: 64 }); return;
+    }
+    if (!guild) return;
+    const target = i.options.getUser("user", true);
+    const reason = i.options.getString("reason") || "No reason provided";
+    const m = guild.members.cache.get(target.id);
+    if (m && !m.bannable) { await i.reply({ embeds: [errEmbed("I cannot ban this member.")], flags: 64 }); return; }
+    await i.deferReply();
+    await guild.members.ban(target.id, { reason });
+    await i.editReply({ embeds: [new EmbedBuilder().setColor(ERROR_COLOR).setTitle("🔨 Member Banned").addFields({ name: "User", value: `<@${target.id}>`, inline: true }, { name: "Moderator", value: `<@${user.id}>`, inline: true }, { name: "Reason", value: reason }).setTimestamp()] });
+    return;
+  }
+
+  if (commandName === "members") {
+    if (!guild) return;
+    await i.deferReply();
+    const g = await guild.fetch();
+    await g.members.fetch().catch(() => {});
+    const online = g.members.cache.filter((m) => m.presence?.status !== "offline" && !!m.presence?.status).size;
+    const bots   = g.members.cache.filter((m) => m.user.bot).size;
+    const humans = g.memberCount - bots;
+    const embed = new EmbedBuilder()
+      .setColor(BOT_COLOR)
+      .setTitle(`👥 Members — ${g.name}`)
+      .setThumbnail(g.iconURL())
+      .addFields(
+        { name: "Total",  value: `${g.memberCount}`, inline: true },
+        { name: "Humans", value: `${humans}`,         inline: true },
+        { name: "Bots",   value: `${bots}`,           inline: true },
+        { name: "Online", value: `${online || "N/A"}`, inline: true },
+      )
+      .setTimestamp();
     await i.editReply({ embeds: [embed] });
     return;
   }
@@ -1499,6 +1748,99 @@ async function handleButton(i: ButtonInteraction) {
     return;
   }
 
+  if (customId === "build_service_ticket") {
+    await i.reply({
+      embeds: [new EmbedBuilder().setColor(GOLD_COLOR).setTitle("Building Services").setDescription("Will you be using a **server schematic** or providing a **custom schematic**?")],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId("build_srv_server").setLabel("Server Schematic").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("build_srv_custom").setLabel("Custom Schematic").setStyle(ButtonStyle.Secondary),
+      )],
+      flags: 64,
+    });
+    return;
+  }
+
+  if (customId === "build_srv_server") {
+    const modal = new ModalBuilder().setCustomId("mod_farm_server").setTitle("Building Service: Server Schematic");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("which_schematic").setLabel("Which server schematic do you want?").setStyle(TextInputStyle.Short).setPlaceholder("e.g. Bone Block Farm, Cobble Farm...").setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("mined_space").setLabel("Do you have a mined out space? (Yes/No)").setStyle(TextInputStyle.Short).setPlaceholder("If No, it costs 1,000 per block mined").setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("due_date").setLabel("When is it due?").setStyle(TextInputStyle.Short).setPlaceholder("e.g. ASAP, 2 weeks, March 1st").setRequired(true)),
+    );
+    await i.showModal(modal);
+    return;
+  }
+
+  if (customId === "build_srv_custom") {
+    const modal = new ModalBuilder().setCustomId("mod_farm_custom").setTitle("Building Service: Custom Schematic");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("budget").setLabel("How much are you willing to spend?").setStyle(TextInputStyle.Short).setPlaceholder("e.g. $500, negotiable").setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("mined_space").setLabel("Do you have a mined out space? (Yes/No)").setStyle(TextInputStyle.Short).setPlaceholder("If No, it costs 1,000 per block mined").setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("due_date").setLabel("When is it due?").setStyle(TextInputStyle.Short).setPlaceholder("e.g. ASAP, 2 weeks, March 1st").setRequired(true)),
+    );
+    await i.showModal(modal);
+    return;
+  }
+
+  if (customId === "dig_service_ticket") {
+    const modal = new ModalBuilder().setCustomId("mod_dig_service").setTitle("Digging Service");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("dim_x").setLabel("X dimension (length)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("e.g. 50")),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("dim_y").setLabel("Y dimension (depth)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("e.g. 30")),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("dim_z").setLabel("Z dimension (width)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("e.g. 50")),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("due_date").setLabel("When is it due?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. ASAP, 2 weeks")),
+    );
+    await i.showModal(modal);
+    return;
+  }
+
+  if (customId === "partnership_ticket") {
+    if (!guild) return;
+    await i.deferReply({ flags: 64 });
+    let discordCat = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === "Partnership Tickets") as CategoryChannel | undefined;
+    if (!discordCat) {
+      discordCat = await guild.channels.create({
+        name: "Partnership Tickets",
+        type: ChannelType.GuildCategory,
+        permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }],
+      });
+    }
+    const ticketNum = storage.nextTicketNumber();
+    const safeName  = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+    const ticketChannel = await guild.channels.create({
+      name: `partner-${safeName}`,
+      type: ChannelType.GuildText,
+      parent: discordCat.id,
+      topic: `Partnership Ticket | ${user.tag}`,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id,  deny: [PermissionFlagsBits.ViewChannel] },
+        { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+        { id: guild.members.me!.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
+        { id: OWNER_ROLE_ID,    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+        { id: CO_OWNER_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+      ],
+    });
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor(BOT_COLOR)
+      .setTitle(`🤝 Partnership Ticket: ${ticketTag(ticketNum)}`)
+      .setDescription("Thanks for your interest in partnering with us!\n\nPlease describe your server, player count, and what you're looking for in a partnership. Staff will be with you shortly.")
+      .addFields(
+        { name: "Opened by", value: `<@${user.id}>`, inline: true },
+        { name: "Ticket",    value: ticketTag(ticketNum), inline: true },
+      )
+      .setTimestamp();
+    await ticketChannel.send({
+      content: `<@${user.id}> <@&${OWNER_ROLE_ID}> <@&${CO_OWNER_ROLE_ID}>`,
+      embeds: [welcomeEmbed],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
+      )],
+    });
+    storage.addTicket(ticketChannel.id, { userId: user.id, username: user.username, categoryId: "partnership", guildId: guild.id, channelId: ticketChannel.id, createdAt: new Date().toISOString(), ticketNumber: ticketNum });
+    await i.editReply({ embeds: [okEmbed(`✅ Your partnership ticket has been created: <#${ticketChannel.id}>`)] });
+    return;
+  }
+
   if (customId === "skelly_buy" || customId === "skelly_sell") {
     const isBuying = customId === "skelly_buy";
     if (!guild) return;
@@ -2050,6 +2392,73 @@ async function handleModal(i: ModalSubmitInteraction) {
           ,
       ],
     });
+    return;
+  }
+
+  if (customId === "mod_dig_service") {
+    const { guild } = i;
+    if (!guild) return;
+    const dimX = parseFloat(i.fields.getTextInputValue("dim_x")) || 0;
+    const dimY = parseFloat(i.fields.getTextInputValue("dim_y")) || 0;
+    const dimZ = parseFloat(i.fields.getTextInputValue("dim_z")) || 0;
+    const dueDate = i.fields.getTextInputValue("due_date").trim() || "ASAP";
+    if (dimX <= 0 || dimY <= 0 || dimZ <= 0) {
+      await i.reply({ embeds: [errEmbed("All dimensions must be positive numbers.")], flags: 64 }); return;
+    }
+    const totalBlocks = dimX * dimY * dimZ;
+    const price = totalBlocks * 950;
+    const existingId = storage.hasOpenTicket(user.id, "digging", guild.id);
+    if (existingId && guild.channels.cache.get(existingId)) {
+      await i.reply({ embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open digging ticket: <#${existingId}>`)], flags: 64 }); return;
+    }
+    if (existingId) storage.removeTicket(existingId);
+    await i.deferReply({ flags: 64 });
+    let discordCat = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === "Digging Tickets") as CategoryChannel | undefined;
+    if (!discordCat) {
+      discordCat = await guild.channels.create({
+        name: "Digging Tickets",
+        type: ChannelType.GuildCategory,
+        permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }],
+      });
+    }
+    const ticketNum = storage.nextTicketNumber();
+    const safeName  = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+    const ticketChannel = await guild.channels.create({
+      name: `dig-${safeName}`,
+      type: ChannelType.GuildText,
+      parent: discordCat.id,
+      topic: `Digging Ticket ${ticketTag(ticketNum)} | ${user.tag}`,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] },
+        { id: guild.members.me!.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
+        { id: BUILD_TICKET_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+      ],
+    });
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor(SUCCESS_COLOR)
+      .setTitle(`⛏️ Digging Service: ${ticketTag(ticketNum)}`)
+      .setDescription("Thank you for ordering a digging service! A builder will claim this shortly.")
+      .addFields(
+        { name: "Opened by",       value: `<@${user.id}>`,                        inline: true },
+        { name: "Ticket",          value: ticketTag(ticketNum),                    inline: true },
+        { name: "Dimensions",      value: `${dimX} × ${dimY} × ${dimZ}`,          inline: true },
+        { name: "Total Blocks",    value: `${fmtNum(totalBlocks)} blocks`,         inline: true },
+        { name: "Estimated Price", value: `$${fmtNum(price)}`,                     inline: true },
+        { name: "Due Date",        value: dueDate,                                 inline: true },
+      )
+      .setFooter({ text: `Formula: ${dimX} × ${dimY} × ${dimZ} × $950` })
+      .setTimestamp();
+    await ticketChannel.send({
+      content: `<@${user.id}> <@&${BUILD_TICKET_ROLE_ID}>`,
+      embeds: [welcomeEmbed],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim Ticket").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
+      )],
+    });
+    storage.addTicket(ticketChannel.id, { userId: user.id, username: user.username, categoryId: "digging", guildId: guild.id, channelId: ticketChannel.id, createdAt: new Date().toISOString(), ticketNumber: ticketNum });
+    await i.editReply({ embeds: [new EmbedBuilder().setColor(SUCCESS_COLOR).setTitle("⛏️ Digging Ticket Created").setDescription(`Your ticket: <#${ticketChannel.id}>\n\n**Estimated cost:** $${fmtNum(price)}\n\`${dimX} × ${dimY} × ${dimZ} × $950\``).setTimestamp()] });
     return;
   }
 
@@ -2623,27 +3032,39 @@ function skellyTicketComponents() {
 }
 
 function farmTicketPanelEmbed() {
-  const data = storage.getData();
-  const desc = storage.getCategoryMessage("buy-farms") ?? FARM_CATEGORY.description;
   return new EmbedBuilder()
     .setColor(GOLD_COLOR)
-    .setTitle("Buy Farms")
-    .setDescription(`**${FARM_CATEGORY.label}** – ${desc}\n\n${data.farmList}`)
-    
+    .setTitle("Building Services")
+    .setDescription([
+      "**Building Service Rules**",
+      "- Always pay **`___Vault___`** and not the builder",
+      "- If bot fails to track payment send an uncropped screenshot",
+      "- If the base is raided under 3 days you get a 25% refund",
+      "- Failure to comply with these rules result in a no refund situation",
+      "",
+      "Order a build service 👇",
+      "",
+      "─────────────────────────",
+      "",
+      "**Digging Services**",
+      "Order a digout service. Price formula: `X × Y × Z × $950`",
+      "",
+      "─────────────────────────",
+      "",
+      "**Partnership**",
+      "Interested in partnering with us? Click the button below.",
+    ].join("\n"))
     .setTimestamp();
 }
 
 function farmTicketComponents() {
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("sel_farm_topic")
-    .setPlaceholder("Open a Farm Ticket")
-    .addOptions(
-      new StringSelectMenuOptionBuilder()
-        .setLabel("Buy Farms")
-        .setValue("buy-farms")
-        .setDescription("Open a farm purchase ticket"),
-    );
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("build_service_ticket").setLabel("🏗️ Building Services").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dig_service_ticket").setLabel("⛏️ Digging Services").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("partnership_ticket").setLabel("🤝 Partnership").setStyle(ButtonStyle.Secondary),
+    ),
+  ];
 }
 
 function farmInfoEmbed() {

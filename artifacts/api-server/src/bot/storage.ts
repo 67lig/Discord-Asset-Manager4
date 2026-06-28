@@ -14,6 +14,14 @@ export interface TicketEntry {
   joinedStaff?: string[];
 }
 
+export interface WarnEntry {
+  userId: string;
+  reason: string;
+  moderatorId: string;
+  moderatorTag: string;
+  timestamp: string;
+}
+
 export interface StickerEntry {
   channelId: string;
   guildId: string;
@@ -52,6 +60,8 @@ interface BotData {
   ticketPanelDesc: string;
   giveaways: Record<string, GiveawayEntry>;
   stickers: Record<string, StickerEntry>;
+  warns: Record<string, WarnEntry[]>;
+  welcomeChannelId: string;
 }
 
 const DATA_FILE = path.resolve(process.cwd(), "bot-data.json");
@@ -73,6 +83,8 @@ function defaultData(): BotData {
       "Need help or have a question? Click one of the buttons below to open a ticket. Our staff will assist you as soon as possible.",
     giveaways: {},
     stickers: {},
+    warns: {},
+    welcomeChannelId: "",
   };
 }
 
@@ -320,5 +332,39 @@ export const storage = {
     delete _data.stickers[messageId];
     saveData(_data);
     return s;
+  },
+
+  addWarn(userId: string, warn: WarnEntry): number {
+    if (!_data.warns) _data.warns = {};
+    if (!_data.warns[userId]) _data.warns[userId] = [];
+    _data.warns[userId]!.push(warn);
+    saveData(_data);
+    return _data.warns[userId]!.length;
+  },
+
+  getWarns(userId: string): WarnEntry[] {
+    return _data.warns?.[userId] ?? [];
+  },
+
+  clearWarns(userId: string): void {
+    if (_data.warns) delete _data.warns[userId];
+    saveData(_data);
+  },
+
+  removeWarn(userId: string, idx: number): boolean {
+    const warns = _data.warns?.[userId];
+    if (!warns || idx < 0 || idx >= warns.length) return false;
+    warns.splice(idx, 1);
+    saveData(_data);
+    return true;
+  },
+
+  setWelcomeChannelId(id: string): void {
+    _data.welcomeChannelId = id;
+    saveData(_data);
+  },
+
+  getWelcomeChannelId(): string {
+    return _data.welcomeChannelId ?? "";
   },
 };

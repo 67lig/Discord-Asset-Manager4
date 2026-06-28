@@ -16,7 +16,9 @@
       "guildId": "1450662191890956322",
       "channelId": "1520651993583059026",
       "createdAt": "2026-06-28T04:48:08.349Z",
-      "ticketNumber": 12
+      "ticketNumber": 12,
+      "claimedBy": "arlighe",
+      "claimedById": "1384009855043633237"
     }
   },
   "ticketCounter": 12,

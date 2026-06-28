@@ -1372,7 +1372,8 @@ async function handleButton(i: ButtonInteraction) {
     if (!ticket) { await i.reply({ embeds: [errEmbed("Not a ticket channel.")], flags: 64 }); return; }
     const member = i.member as GuildMember;
     const isFarmBuilder = ticket.categoryId === "buy-farms" && member.roles.cache.has(BUILD_TICKET_ROLE_ID);
-    if (!isStaff(member) && !isFarmBuilder) {
+    const isSkellyStaff = ticket.categoryId === "skellys" && member.roles.cache.has(SKELLY_TICKET_ROLE_ID);
+    if (!isStaff(member) && !isFarmBuilder && !isSkellyStaff) {
       await i.reply({ embeds: [errEmbed("You don't have permission to claim this ticket.")], flags: 64 }); return;
     }
     if (ticket.claimedById) {

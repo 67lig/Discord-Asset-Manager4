@@ -8,9 +8,18 @@
       "channelId": "1520406851714289674",
       "createdAt": "2026-06-27T12:34:01.704Z",
       "ticketNumber": 8
+    },
+    "1520651993583059026": {
+      "userId": "1491457883219693720",
+      "username": "v3lgh",
+      "categoryId": "skellys",
+      "guildId": "1450662191890956322",
+      "channelId": "1520651993583059026",
+      "createdAt": "2026-06-28T04:48:08.349Z",
+      "ticketNumber": 12
     }
   },
-  "ticketCounter": 10,
+  "ticketCounter": 12,
   "farmDescription": "Buy Farms – For users interested in purchasing a farm. Use this ticket for farm availability, pricing, purchase inquiries, or any questions related to buying a farm.",
   "farmList": "Available farms:\nNone\n\n** CURRENTLY LOOKING FOR BUILDERS, MAKE A SUPPORT TICKET TO APPLY **\n\n\n\nMining Services: 1k Per Block",
   "skellyDescription": ":skelly:  Buy/Sell Skellys – For purchase questions, payment issues, donation inquiries, reward claims, or buying/selling Skelly Spawners.",

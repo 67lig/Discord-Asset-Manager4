@@ -1190,6 +1190,30 @@ async function handleButton(i: ButtonInteraction) {
     return;
   }
 
+  if (customId === "builder_type_builder" || customId === "builder_type_schematic" || customId === "builder_type_both") {
+    const ticket = storage.getTicket(i.channel!.id);
+    if (ticket && user.id !== ticket.userId && !isStaff(i.member as GuildMember)) {
+      await i.reply({ embeds: [errEmbed("Only the ticket opener can select an application type.")], flags: 64 });
+      return;
+    }
+    const label = customId === "builder_type_builder" ? "Builder" : customId === "builder_type_schematic" ? "Schematic Poster" : "Both (Builder + Schematic Poster)";
+    const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("builder_type_builder").setLabel("Builder").setStyle(ButtonStyle.Primary).setDisabled(true),
+      new ButtonBuilder().setCustomId("builder_type_schematic").setLabel("Schematic Poster").setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId("builder_type_both").setLabel("Both").setStyle(ButtonStyle.Success).setDisabled(true),
+    );
+    await i.update({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xe67e22)
+          .setTitle("Application Type Selected")
+          .setDescription(`<@${user.id}> is applying as: **${label}**`),
+      ],
+      components: [disabledRow],
+    });
+    return;
+  }
+
   if (customId.startsWith("show_transcript_")) {
     const ticketNumber = parseInt(customId.slice("show_transcript_".length), 10);
     const buf = storage.readTranscript(ticketNumber);
@@ -2265,6 +2289,23 @@ async function handleTicketCreate(
 
   const ping = `<@${user.id}> <@&${GENERAL_TICKET_ROLE_ID}>`;
   await ticketChannel.send({ content: ping, embeds: [welcomeEmbed], components: [controlRow] });
+
+  if (categoryId === "builder-application") {
+    const typeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("builder_type_builder").setLabel("Builder").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("builder_type_schematic").setLabel("Schematic Poster").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("builder_type_both").setLabel("Both").setStyle(ButtonStyle.Success),
+    );
+    await ticketChannel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xe67e22)
+          .setTitle("What are you applying for?")
+          .setDescription("Please select whether you would like to become a **Builder**, a **Schematic Poster**, or **Both**."),
+      ],
+      components: [typeRow],
+    });
+  }
 
   storage.addTicket(ticketChannel.id, {
     userId: user.id,

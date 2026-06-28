@@ -395,9 +395,7 @@ export function createBotClient(): Client | null {
         const ch = msg.channel as TextChannel;
         for (const sticker of channelStickers) {
           await ch.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
-          const newMsg = await ch.send({
-            embeds: [new EmbedBuilder().setDescription(sticker.text).setColor(0x2b2d31)],
-          });
+          const newMsg = await ch.send({ content: sticker.text });
           storage.replaceStickerMessage(sticker.messageId, newMsg.id);
         }
       } finally {
@@ -1015,9 +1013,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
     if (sub === "post") {
       const text = i.options.getString("text", true);
       await i.deferReply({ flags: 64 });
-      const msg = await (channel as TextChannel).send({
-        embeds: [new EmbedBuilder().setDescription(text).setColor(0x2b2d31)],
-      });
+      const msg = await (channel as TextChannel).send({ content: text });
       storage.addSticker({
         channelId: channel.id,
         guildId: guild.id,
@@ -1047,9 +1043,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
       const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
       if (stickerCh) {
         await stickerCh.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
-        const newMsg = await stickerCh.send({
-          embeds: [new EmbedBuilder().setDescription(newText).setColor(0x2b2d31)],
-        });
+        const newMsg = await stickerCh.send({ content: newText });
         storage.updateStickerText(newMsg.id, newText);
         storage.replaceStickerMessage(msgId, newMsg.id);
         await i.editReply({

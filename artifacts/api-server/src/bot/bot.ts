@@ -36,6 +36,7 @@ import {
 import { logger } from "../lib/logger.js";
 import {
   OWNER_ID,
+  CO_OWNER_ROLE_ID,
   REGULAR_CATEGORIES,
   FARM_CATEGORY,
   ALL_CATEGORIES,
@@ -420,6 +421,39 @@ async function registerCommands(client: Client) {
             opt.setName("id").setDescription("Giveaway ID").setRequired(true),
           ),
       ),
+    new SlashCommandBuilder()
+      .setName("sticker")
+      .setDescription("Manage pinned sticker messages in a channel")
+      .addSubcommand((sub) =>
+        sub
+          .setName("post")
+          .setDescription("Post a new sticker message in this channel")
+          .addStringOption((opt) =>
+            opt.setName("text").setDescription("Sticker content").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("edit")
+          .setDescription("Edit an existing sticker")
+          .addStringOption((opt) =>
+            opt.setName("id").setDescription("Sticker ID").setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName("text").setDescription("New content").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("delete")
+          .setDescription("Delete a sticker")
+          .addStringOption((opt) =>
+            opt.setName("id").setDescription("Sticker ID").setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub.setName("list").setDescription("List all stickers in this channel"),
+      ),
   ].map((c) => c.toJSON());
 
   try {
@@ -486,17 +520,19 @@ async function handleInteraction(i: Interaction) {
 }
 
 function isOwner(id: string) { return id === OWNER_ID; }
+function isCoOwner(m: GuildMember) { return m.roles.cache.has(CO_OWNER_ROLE_ID) && !isOwner(m.id); }
+function isOwnerOrCoOwner(m: GuildMember) { return isOwner(m.id) || isCoOwner(m); }
 function isStaff(m: GuildMember) {
-  return isOwner(m.id)
+  return isOwnerOrCoOwner(m)
     || m.permissions.has(PermissionFlagsBits.ManageChannels)
     || m.permissions.has(PermissionFlagsBits.Administrator)
     || STAFF_ROLE_IDS.some((id) => m.roles.cache.has(id));
 }
 function isMod(m: GuildMember) {
-  return isOwner(m.id) || MOD_ROLE_IDS.some((id) => m.roles.cache.has(id));
+  return isOwnerOrCoOwner(m) || MOD_ROLE_IDS.some((id) => m.roles.cache.has(id));
 }
 function canManageGiveaway(m: GuildMember) {
-  return isOwner(m.id) || m.roles.cache.has(GIVEAWAY_ROLE_ID);
+  return isOwnerOrCoOwner(m) || m.roles.cache.has(GIVEAWAY_ROLE_ID);
 }
 
 async function logToChannel(guild: Guild, channelId: string, embed: EmbedBuilder) {
@@ -686,7 +722,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
   }
 
   if (commandName === "panel") {
-    if (!isOwner(user.id)) {
+    if (!isOwnerOrCoOwner(i.member as GuildMember)) {
       await i.reply({ embeds: [errEmbed("You are not authorized.")], flags: 64 });
       return;
     }
@@ -918,6 +954,105 @@ async function handleCommand(i: ChatInputCommandInteraction) {
     await (channel as TextChannel).permissionOverwrites.delete(target.id);
     await i.reply({ embeds: [okEmbed(`Removed <@${target.id}> from this ticket.`)] });
     return;
+  }
+
+  if (commandName === "sticker") {
+    if (!guild || !channel) return;
+    const member = i.member as GuildMember;
+    if (!isOwnerOrCoOwner(member)) {
+      await i.reply({ embeds: [errEmbed("Only the Owner or Co-Owner can manage stickers.")], flags: 64 });
+      return;
+    }
+    const sub = i.options.getSubcommand();
+
+    if (sub === "post") {
+      const text = i.options.getString("text", true);
+      await i.deferReply({ flags: 64 });
+      const msg = await (channel as TextChannel).send({ content: text });
+      await msg.pin().catch(() => {});
+      const stickerId = `stk_${Date.now().toString(36)}`;
+      storage.addSticker({
+        id: stickerId,
+        channelId: channel.id,
+        guildId: guild.id,
+        messageId: msg.id,
+        text,
+        createdAt: new Date().toISOString(),
+      });
+      await i.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(SUCCESS_COLOR)
+            .setDescription(`Sticker posted and pinned.\n**ID:** \`${stickerId}\``),
+        ],
+      });
+      return;
+    }
+
+    if (sub === "edit") {
+      const stickerId = i.options.getString("id", true).trim();
+      const newText = i.options.getString("text", true);
+      const sticker = storage.getSticker(stickerId);
+      if (!sticker) {
+        await i.reply({ embeds: [errEmbed(`No sticker found with ID \`${stickerId}\`.`)], flags: 64 });
+        return;
+      }
+      await i.deferReply({ flags: 64 });
+      try {
+        const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
+        if (stickerCh) {
+          const msg = await stickerCh.messages.fetch(sticker.messageId);
+          await msg.edit({ content: newText });
+        }
+      } catch {
+        await i.editReply({ embeds: [errEmbed("Could not find or edit the sticker message. It may have been deleted.")] });
+        return;
+      }
+      storage.updateStickerText(stickerId, newText);
+      await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` updated.`)] });
+      return;
+    }
+
+    if (sub === "delete") {
+      const stickerId = i.options.getString("id", true).trim();
+      const sticker = storage.deleteSticker(stickerId);
+      if (!sticker) {
+        await i.reply({ embeds: [errEmbed(`No sticker found with ID \`${stickerId}\`.`)], flags: 64 });
+        return;
+      }
+      await i.deferReply({ flags: 64 });
+      try {
+        const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
+        if (stickerCh) {
+          const msg = await stickerCh.messages.fetch(sticker.messageId);
+          await msg.unpin().catch(() => {});
+          await msg.delete().catch(() => {});
+        }
+      } catch {}
+      await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` deleted.`)] });
+      return;
+    }
+
+    if (sub === "list") {
+      const stickers = storage.getStickersForChannel(channel.id);
+      if (stickers.length === 0) {
+        await i.reply({ embeds: [infoEmbed("No stickers in this channel.")], flags: 64 });
+        return;
+      }
+      const lines = stickers.map(
+        (s) => `**\`${s.id}\`** — ${s.text.slice(0, 80)}${s.text.length > 80 ? "…" : ""} ([jump](https://discord.com/channels/${s.guildId}/${s.channelId}/${s.messageId}))`,
+      );
+      await i.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(BOT_COLOR)
+            .setTitle(`Stickers in this channel (${stickers.length})`)
+            .setDescription(lines.join("\n")),
+        ],
+        flags: 64,
+      });
+      return;
+    }
   }
 }
 

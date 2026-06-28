@@ -14,6 +14,15 @@ export interface TicketEntry {
   joinedStaff?: string[];
 }
 
+export interface StickerEntry {
+  id: string;
+  channelId: string;
+  guildId: string;
+  messageId: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface GiveawayEntry {
   id: string;
   guildId: string;
@@ -43,6 +52,7 @@ interface BotData {
   ticketPanelTitle: string;
   ticketPanelDesc: string;
   giveaways: Record<string, GiveawayEntry>;
+  stickers: Record<string, StickerEntry>;
 }
 
 const DATA_FILE = path.resolve(process.cwd(), "bot-data.json");
@@ -63,6 +73,7 @@ function defaultData(): BotData {
     ticketPanelDesc:
       "Need help or have a question? Click one of the buttons below to open a ticket. Our staff will assist you as soon as possible.",
     giveaways: {},
+    stickers: {},
   };
 }
 
@@ -269,5 +280,36 @@ export const storage = {
     if (!gw) return;
     gw.messageId = messageId;
     saveData(_data);
+  },
+
+  addSticker(sticker: StickerEntry) {
+    if (!_data.stickers) _data.stickers = {};
+    _data.stickers[sticker.id] = sticker;
+    saveData(_data);
+  },
+
+  getSticker(id: string): StickerEntry | undefined {
+    return _data.stickers?.[id];
+  },
+
+  getStickersForChannel(channelId: string): StickerEntry[] {
+    if (!_data.stickers) return [];
+    return Object.values(_data.stickers).filter((s) => s.channelId === channelId);
+  },
+
+  updateStickerText(id: string, text: string): boolean {
+    const s = _data.stickers?.[id];
+    if (!s) return false;
+    s.text = text;
+    saveData(_data);
+    return true;
+  },
+
+  deleteSticker(id: string): StickerEntry | undefined {
+    const s = _data.stickers?.[id];
+    if (!s) return undefined;
+    delete _data.stickers[id];
+    saveData(_data);
+    return s;
   },
 };

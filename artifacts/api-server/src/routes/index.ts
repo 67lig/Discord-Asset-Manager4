@@ -6,3 +6,4 @@ const router: IRouter = Router();
 router.use(healthRouter);
 
 export default router;
+

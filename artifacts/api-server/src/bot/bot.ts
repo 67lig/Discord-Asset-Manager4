@@ -1108,9 +1108,7 @@ async function handleButton(i: ButtonInteraction) {
         { name: "Prize",       value: gw.prize,             inline: true },
         { name: "Winner",      value: `<@${user.id}>`,      inline: true },
         { name: "Giveaway ID", value: `\`${gw.id}\``,       inline: true },
-        ...(claimExpiry
-          ? [{ name: "Claim Expires", value: `<t:${claimExpiry}:R>`, inline: true }]
-          : []),
+        { name: "Claimed in Time", value: "✅", inline: true },
       )
       
       .setTimestamp();

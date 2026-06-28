@@ -2337,20 +2337,19 @@ const SKELLY_PRICE_CHANNEL = "https://discord.com/channels/1450662191890956322/1
 
 const SKELLY_PRICE_TEXT = [
   "**Buying:**",
-  "💀 Skeleton — 3.2m each",
-  "💚 Creeper — 5m each",
-  "🐷 Zombified Piglin — 4m each",
-  "⚙️ Iron Golem — 5m each",
+  "Skeleton — 3.3m each",
+  "Creeper — 3.3m each",
+  "Iron Golem — 5.5m each",
   "",
   "**Selling:**",
-  "💀 Skeleton — 3.8m each",
-  "💚 Creeper — 8m each",
-  "⚙️ Iron Golem — 10m each",
+  "Skeleton — 3.9m each",
+  "Creeper — 8m each",
+  "Iron Golem — 9m each",
   "",
   "**Notes:**",
   "Our prices are possibly negotiable",
   "5x5 minimum",
-  "32 spawner minimum",
+  "16 spawner minimum",
 ].join("\n");
 
 function skellyTicketPanelEmbed() {

@@ -42,15 +42,6 @@ export const REGULAR_CATEGORIES: TicketCategory[] = [
     discordCategoryName: "Support Tickets",
   },
   {
-    id: "skellys",
-    label: "Buy/Sell Skellys",
-    description:
-      "For purchase questions, payment issues, donation inquiries, reward claims, buying/selling Skelly Spawners, or anything not covered under Support or Reports. The system also allows users to ask questions about their items, perks, and the current status of their transactions.",
-    color: 0x5865f2,
-    channelPrefix: "skellys",
-    discordCategoryName: "Skelly Tickets",
-  },
-  {
     id: "giveaway",
     label: "Giveaway",
     description:
@@ -61,15 +52,25 @@ export const REGULAR_CATEGORIES: TicketCategory[] = [
   },
 ];
 
+export const SKELLY_CATEGORY: TicketCategory = {
+  id: "skellys",
+  label: "Buy/Sell Skellys",
+  description:
+    "For purchase questions, payment issues, donation inquiries, reward claims, buying/selling Skelly Spawners, or anything not covered under Support or Reports.",
+  color: 0x5865f2,
+  channelPrefix: "skelly",
+  discordCategoryName: "Skelly Tickets",
+};
+
 export const FARM_CATEGORY: TicketCategory = {
   id: "buy-farms",
   label: "Buy Farms",
   description:
     "Buy Farms – For users interested in purchasing a farm. Use this ticket for farm availability, pricing, purchase inquiries, or any questions related to buying a farm.",
   color: SUCCESS_COLOR,
-  channelPrefix: "farm",
-  discordCategoryName: "Farm Tickets",
+  channelPrefix: "build",
+  discordCategoryName: "Build Tickets",
   isFarm: true,
 };
 
-export const ALL_CATEGORIES: TicketCategory[] = [...REGULAR_CATEGORIES, FARM_CATEGORY];
+export const ALL_CATEGORIES: TicketCategory[] = [...REGULAR_CATEGORIES, SKELLY_CATEGORY, FARM_CATEGORY];

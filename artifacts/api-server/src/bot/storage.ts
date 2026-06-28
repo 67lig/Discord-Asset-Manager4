@@ -38,6 +38,7 @@ interface BotData {
   ticketCounter: number;
   farmDescription: string;
   farmList: string;
+  skellyDescription: string;
   categoryMessages: Record<string, string>;
   ticketPanelTitle: string;
   ticketPanelDesc: string;
@@ -55,6 +56,8 @@ function defaultData(): BotData {
     farmDescription:
       "Buy Farms – For users interested in purchasing a farm. Use this ticket for farm availability, pricing, purchase inquiries, or any questions related to buying a farm.",
     farmList: "available farms:\n\n(No farms currently listed. Check back soon!)",
+    skellyDescription:
+      "Buy/Sell Skellys – For purchase questions, payment issues, donation inquiries, reward claims, or buying/selling Skelly Spawners.",
     categoryMessages: {},
     ticketPanelTitle: "1450662192365047822,1450662192365047823,1450662192365047824,1450662192365047824,1450662192365047825thSupport Tickets",
     ticketPanelDesc:
@@ -161,6 +164,11 @@ export const storage = {
       ([, t]) => t.userId === userId && t.categoryId === categoryId && t.guildId === guildId,
     );
     return entry ? entry[0] : null;
+  },
+
+  updateSkellyDescription(desc: string) {
+    _data.skellyDescription = desc ?? "";
+    saveData(_data);
   },
 
   updateFarmDescription(desc: string) {

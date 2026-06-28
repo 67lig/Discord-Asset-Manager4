@@ -50,6 +50,7 @@ import {
   TRANSCRIPT_CHANNEL_ID,
   MOD_ROLE_IDS,
   STAFF_ROLE_IDS,
+  SKELLY_CATEGORY,
 } from "./config.js";
 import { storage, type GiveawayEntry } from "./storage.js";
 
@@ -1308,6 +1309,9 @@ async function handleButton(i: ButtonInteraction) {
     }
     storage.claimTicket(i.channel.id, user.username, user.id);
     if (ticket.categoryId === "buy-farms") {
+      const openerSafe = ticket.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14) || "user";
+      const claimerSafe = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14) || "builder";
+      await (i.channel as TextChannel).setName(`build-${openerSafe}-${claimerSafe}`).catch(() => {});
       await i.reply({
         embeds: [okEmbed(`Ticket claimed by <@${user.id}>.`)],
         components: [
@@ -1417,6 +1421,24 @@ async function handleButton(i: ButtonInteraction) {
       }); return;
     }
 
+    case "panel_skelly": {
+      const data = storage.getData();
+      const embed = new EmbedBuilder()
+        .setColor(BOT_COLOR)
+        .setTitle("Skelly Panel")
+        .addFields({ name: "Description", value: (data.skellyDescription || SKELLY_CATEGORY.description).slice(0, 900) });
+      await i.update({
+        embeds: [embed],
+        components: [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId("sk_send_panel").setLabel("Send Skelly Panel").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId("sk_edit_desc").setLabel("Edit Description").setStyle(ButtonStyle.Secondary),
+          ),
+          backRow("panel_back"),
+        ],
+      }); return;
+    }
+
     case "t_send": {
       if (!i.channel) return;
       await i.deferUpdate();
@@ -1469,6 +1491,24 @@ async function handleButton(i: ButtonInteraction) {
       await i.update({ embeds: [embed], components: [backRow("panel_tickets")] }); return;
     }
 
+    case "sk_send_panel": {
+      if (!i.channel) return;
+      await i.deferUpdate();
+      await (i.channel as TextChannel).send({ embeds: [skellyTicketPanelEmbed()], components: skellyTicketComponents() });
+      await i.editReply({ embeds: [okEmbed("✅ Skelly ticket panel sent to this channel.")], components: [backRow("panel_skelly")] });
+      return;
+    }
+
+    case "sk_edit_desc": {
+      const modal = new ModalBuilder().setCustomId("mod_skelly_desc").setTitle("Edit Skelly Description");
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder().setCustomId("skelly_desc").setLabel("Description").setStyle(TextInputStyle.Paragraph).setValue(storage.getData().skellyDescription || SKELLY_CATEGORY.description).setRequired(true),
+        ),
+      );
+      await i.showModal(modal); return;
+    }
+
     case "f_send_panel": {
       if (!i.channel) return;
       await i.deferUpdate();
@@ -1512,6 +1552,34 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
 
   if (customId === "sel_ticket_topic") {
     await handleTicketCreate(i, values[0]!, false);
+    return;
+  }
+
+  if (customId === "sel_skelly_topic") {
+    if (!guild) return;
+    const existingId = storage.hasOpenTicket(user.id, "skellys", guild.id);
+    if (existingId && guild.channels.cache.get(existingId)) {
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open skelly ticket: <#${existingId}>`)],
+        flags: 64,
+      });
+      return;
+    }
+    if (existingId) storage.removeTicket(existingId);
+
+    const modal = new ModalBuilder().setCustomId("mod_skelly_ticket").setTitle("Buy/Sell Skellys");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder().setCustomId("selling").setLabel("How much are you selling?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 5 Skelly Spawners — leave blank if not selling"),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder().setCustomId("buying").setLabel("How much are you buying?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 3 Skelly Spawners — leave blank if not buying"),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder().setCustomId("description").setLabel("Additional details").setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder("Price offers, IGN, anything else relevant..."),
+      ),
+    );
+    await i.showModal(modal);
     return;
   }
 
@@ -1727,7 +1795,7 @@ async function handleModal(i: ModalSubmitInteraction) {
 
     const ticketNum = storage.nextTicketNumber();
     const safeName  = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
-    const channelName = `farm-${safeName}`;
+    const channelName = `build-${safeName}`;
 
     const ticketChannel = await guild.channels.create({
       name: channelName,
@@ -1842,6 +1910,122 @@ async function handleModal(i: ModalSubmitInteraction) {
           .setTimestamp(),
       ],
     });
+    return;
+  }
+
+  if (customId === "mod_skelly_desc") {
+    storage.updateSkellyDescription(i.fields.getTextInputValue("skelly_desc"));
+    await i.reply({ embeds: [okEmbed("Skelly description updated.")], flags: 64 }); return;
+  }
+
+  if (customId === "mod_skelly_ticket") {
+    const { guild } = i;
+    if (!guild) return;
+
+    const selling = i.fields.getTextInputValue("selling").trim();
+    const buying = i.fields.getTextInputValue("buying").trim();
+    const description = i.fields.getTextInputValue("description").trim();
+
+    const existingId = storage.hasOpenTicket(user.id, "skellys", guild.id);
+    if (existingId && guild.channels.cache.get(existingId)) {
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open skelly ticket: <#${existingId}>`)],
+        flags: 64,
+      });
+      return;
+    }
+    if (existingId) storage.removeTicket(existingId);
+
+    await i.deferReply({ flags: 64 });
+
+    let discordCategory = guild.channels.cache.find(
+      (c) => c.type === ChannelType.GuildCategory && c.name === SKELLY_CATEGORY.discordCategoryName,
+    ) as CategoryChannel | undefined;
+    if (!discordCategory) {
+      discordCategory = await guild.channels.create({
+        name: SKELLY_CATEGORY.discordCategoryName,
+        type: ChannelType.GuildCategory,
+        permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }],
+      });
+    }
+
+    const ticketNum = storage.nextTicketNumber();
+    const safeName = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+
+    const ticketChannel = await guild.channels.create({
+      name: `skelly-${safeName}`,
+      type: ChannelType.GuildText,
+      parent: discordCategory.id,
+      topic: `Ticket ${ticketTag(ticketNum)} | Buy/Sell Skellys | ${user.tag}`,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+        {
+          id: user.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks],
+        },
+        {
+          id: guild.members.me!.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages],
+        },
+        ...MOD_ROLE_IDS.map((roleId) => ({
+          id: roleId,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles],
+        })),
+      ],
+    });
+
+    const welcomeFields: { name: string; value: string; inline: boolean }[] = [
+      { name: "Opened by", value: `<@${user.id}>`, inline: true },
+      { name: "Ticket",    value: ticketTag(ticketNum), inline: true },
+      { name: "Opened",    value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+    ];
+    if (selling) welcomeFields.push({ name: "Selling", value: selling, inline: true });
+    if (buying)  welcomeFields.push({ name: "Buying",  value: buying,  inline: true });
+    if (description) welcomeFields.push({ name: "Details", value: description, inline: false });
+
+    const customMsg = storage.getCategoryMessage("skellys") ?? SKELLY_CATEGORY.description;
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor(SKELLY_CATEGORY.color)
+      .setTitle(`Buy/Sell Skellys — ${ticketTag(ticketNum)}`)
+      .setDescription(customMsg)
+      .addFields(...welcomeFields)
+      .setTimestamp();
+
+    const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("ticket_close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
+    );
+
+    await ticketChannel.send({ content: `<@${user.id}>`, embeds: [welcomeEmbed], components: [controlRow] });
+
+    storage.addTicket(ticketChannel.id, {
+      userId: user.id,
+      username: user.username,
+      categoryId: "skellys",
+      guildId: guild.id,
+      channelId: ticketChannel.id,
+      createdAt: new Date().toISOString(),
+      ticketNumber: ticketNum,
+    });
+
+    const logCh = guild.channels.cache.get(TICKET_LOG_CHANNEL_ID) as TextChannel | undefined;
+    if (logCh) {
+      const joinEmbed = new EmbedBuilder()
+        .setColor(SKELLY_CATEGORY.color)
+        .setTitle("New Skelly Ticket")
+        .addFields(
+          { name: "✅ Opened By", value: `<@${user.id}>`, inline: true },
+          { name: "🔵 Panel",     value: SKELLY_CATEGORY.label, inline: true },
+          { name: "📋 Ticket",   value: ticketTag(ticketNum), inline: true },
+        )
+        .setTimestamp();
+      const joinRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`join_ticket_${ticketChannel.id}`).setLabel("+ Join Ticket").setStyle(ButtonStyle.Primary),
+      );
+      await logCh.send({ embeds: [joinEmbed], components: [joinRow] }).catch(() => {});
+    }
+
+    await i.editReply({ embeds: [okEmbed(`✅ Your ticket has been created: <#${ticketChannel.id}>`)] });
     return;
   }
 
@@ -2052,6 +2236,7 @@ function panelRow() {
     new ButtonBuilder().setCustomId("panel_server").setLabel("Server Monitor").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("panel_tickets").setLabel("Ticket Panel").setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId("panel_farms").setLabel("Farm Panel").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("panel_skelly").setLabel("Skelly Panel").setStyle(ButtonStyle.Primary),
   );
 }
 
@@ -2080,6 +2265,29 @@ function ticketPanelComponents() {
     .setCustomId("sel_ticket_topic")
     .setPlaceholder("Select A Topic")
     .addOptions(options);
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+}
+
+function skellyTicketPanelEmbed() {
+  const data = storage.getData();
+  const desc = data.skellyDescription || SKELLY_CATEGORY.description;
+  return new EmbedBuilder()
+    .setColor(SKELLY_CATEGORY.color)
+    .setTitle("Buy/Sell Skellys")
+    .setDescription(desc)
+    .setTimestamp();
+}
+
+function skellyTicketComponents() {
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("sel_skelly_topic")
+    .setPlaceholder("Open a Skelly Ticket")
+    .addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel("Buy/Sell Skellys")
+        .setValue("skellys")
+        .setDescription("Open a skelly transaction ticket"),
+    );
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 

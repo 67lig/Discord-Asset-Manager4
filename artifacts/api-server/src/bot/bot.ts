@@ -51,6 +51,8 @@ import {
   MOD_ROLE_IDS,
   STAFF_ROLE_IDS,
   SKELLY_CATEGORY,
+  GENERAL_TICKET_ROLE_ID,
+  SKELLY_TICKET_ROLE_ID,
 } from "./config.js";
 import { storage, type GiveawayEntry } from "./storage.js";
 
@@ -2061,6 +2063,10 @@ async function handleModal(i: ModalSubmitInteraction) {
           id: guild.members.me!.id,
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages],
         },
+        {
+          id: SKELLY_TICKET_ROLE_ID,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles],
+        },
         ...MOD_ROLE_IDS.map((roleId) => ({
           id: roleId,
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles],
@@ -2090,7 +2096,7 @@ async function handleModal(i: ModalSubmitInteraction) {
       new ButtonBuilder().setCustomId("ticket_close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
     );
 
-    await ticketChannel.send({ content: `<@${user.id}>`, embeds: [welcomeEmbed], components: [controlRow] });
+    await ticketChannel.send({ content: `<@${user.id}> <@&${SKELLY_TICKET_ROLE_ID}>`, embeds: [welcomeEmbed], components: [controlRow] });
 
     storage.addTicket(ticketChannel.id, {
       userId: user.id,
@@ -2257,7 +2263,7 @@ async function handleTicketCreate(
     new ButtonBuilder().setCustomId("ticket_close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
   );
 
-  const ping = isFarm ? `<@${user.id}> <@&${BUILD_TICKET_ROLE_ID}>` : `<@${user.id}>`;
+  const ping = `<@${user.id}> <@&${GENERAL_TICKET_ROLE_ID}>`;
   await ticketChannel.send({ content: ping, embeds: [welcomeEmbed], components: [controlRow] });
 
   storage.addTicket(ticketChannel.id, {

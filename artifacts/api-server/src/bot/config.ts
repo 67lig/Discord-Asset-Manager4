@@ -3,6 +3,8 @@ export const BUILD_TICKET_ROLE_ID = "1518626190813040752";
 export const GIVEAWAY_ROLE_ID = "1520289562637635624";
 export const TICKET_LOG_CHANNEL_ID = "1475866995470893087";
 export const TRANSCRIPT_CHANNEL_ID = "1450662194063867939";
+export const GENERAL_TICKET_ROLE_ID = "1475730171058323623";
+export const SKELLY_TICKET_ROLE_ID = "1520650191139504235";
 
 export const MOD_ROLE_IDS = [
   "1450662192365047822",
@@ -59,6 +61,15 @@ export const REGULAR_CATEGORIES: TicketCategory[] = [
     channelPrefix: "skelly",
     discordCategoryName: "Skelly Tickets",
   },
+  {
+    id: "builder-application",
+    label: "Builder Application / Schematic Poster Application",
+    description:
+      "If you want to post your schematics or become a builder please create a ticket here.",
+    color: 0xe67e22,
+    channelPrefix: "builder",
+    discordCategoryName: "Builder Applications",
+  },
 ];
 
 export const SKELLY_CATEGORY: TicketCategory = {
@@ -81,5 +92,7 @@ export const FARM_CATEGORY: TicketCategory = {
   discordCategoryName: "Build Tickets",
   isFarm: true,
 };
+
+export const BUILDER_CATEGORY: TicketCategory = REGULAR_CATEGORIES.find((c) => c.id === "builder-application")!;
 
 export const ALL_CATEGORIES: TicketCategory[] = [...REGULAR_CATEGORIES, SKELLY_CATEGORY, FARM_CATEGORY];

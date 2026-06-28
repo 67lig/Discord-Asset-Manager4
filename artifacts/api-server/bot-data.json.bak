@@ -286,5 +286,13 @@
       "type": "normal"
     }
   },
-  "stickers": {}
+  "stickers": {
+    "1520877115095121960": {
+      "channelId": "1518633712747548743",
+      "guildId": "1450662191890956322",
+      "messageId": "1520877115095121960",
+      "text": "-# Minimum 25 vouches required to post or trade here, with 0 scam vouches. Make a support ticket if you got proof.",
+      "createdAt": "2026-06-28T19:42:07.640Z"
+    }
+  }
 }

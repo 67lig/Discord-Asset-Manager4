@@ -1295,6 +1295,51 @@ async function handleButton(i: ButtonInteraction) {
     return;
   }
 
+  if (customId === "skelly_buy" || customId === "skelly_sell") {
+    const isBuying = customId === "skelly_buy";
+    if (!guild) return;
+    const existingId = storage.hasOpenTicket(user.id, "skellys", guild.id);
+    if (existingId && guild.channels.cache.get(existingId)) {
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open skelly ticket: <#${existingId}>`)],
+        flags: 64,
+      });
+      return;
+    }
+    if (existingId) storage.removeTicket(existingId);
+    const modal = new ModalBuilder()
+      .setCustomId(isBuying ? "mod_skelly_buy" : "mod_skelly_sell")
+      .setTitle(isBuying ? "Buy Spawners" : "Sell Spawners");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("spawner")
+          .setLabel("What spawner?")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setPlaceholder("e.g. Skeleton, Creeper, Iron Golem..."),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("amount")
+          .setLabel(isBuying ? "How many do you want to buy?" : "How many do you want to sell?")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setPlaceholder("e.g. 64"),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId("details")
+          .setLabel("Additional details")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+          .setPlaceholder("Price offer, IGN, anything else..."),
+      ),
+    );
+    await i.showModal(modal);
+    return;
+  }
+
   if (customId === "ticket_claim") {
     if (!guild || !i.channel) return;
     const ticket = storage.getTicket(i.channel.id);
@@ -1561,20 +1606,16 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
         });
         return;
       }
-      if (existingId) storage.removeTicket(existingId);
-      const modal = new ModalBuilder().setCustomId("mod_skelly_ticket").setTitle("Buy/Sell Skellys");
-      modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder().setCustomId("selling").setLabel("How much are you selling?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 5 Skelly Spawners — leave blank if not selling"),
-        ),
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder().setCustomId("buying").setLabel("How much are you buying?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 3 Skelly Spawners — leave blank if not buying"),
-        ),
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder().setCustomId("description").setLabel("Additional details").setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder("Price offers, IGN, anything else relevant..."),
-        ),
-      );
-      await i.showModal(modal);
+      await i.reply({
+        embeds: [new EmbedBuilder().setColor(SKELLY_CATEGORY.color).setTitle("Spawner Tickets").setDescription(`${SKELLY_PRICE_TEXT}\n\nChoose an option below:`)],
+        components: [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId("skelly_buy").setLabel("Buy Spawners").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId("skelly_sell").setLabel("Sell Spawners").setStyle(ButtonStyle.Primary),
+          ),
+        ],
+        flags: 64,
+      });
       return;
     }
     await handleTicketCreate(i, values[0]!, false);
@@ -1591,21 +1632,16 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
       });
       return;
     }
-    if (existingId) storage.removeTicket(existingId);
-
-    const modal = new ModalBuilder().setCustomId("mod_skelly_ticket").setTitle("Buy/Sell Skellys");
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder().setCustomId("selling").setLabel("How much are you selling?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 5 Skelly Spawners — leave blank if not selling"),
-      ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder().setCustomId("buying").setLabel("How much are you buying?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 3 Skelly Spawners — leave blank if not buying"),
-      ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder().setCustomId("description").setLabel("Additional details").setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder("Price offers, IGN, anything else relevant..."),
-      ),
-    );
-    await i.showModal(modal);
+    await i.reply({
+      embeds: [new EmbedBuilder().setColor(SKELLY_CATEGORY.color).setTitle("Spawner Tickets").setDescription(`${SKELLY_PRICE_TEXT}\n\nChoose an option below:`)],
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId("skelly_buy").setLabel("Buy Spawners").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("skelly_sell").setLabel("Sell Spawners").setStyle(ButtonStyle.Primary),
+        ),
+      ],
+      flags: 64,
+    });
     return;
   }
 
@@ -1944,13 +1980,14 @@ async function handleModal(i: ModalSubmitInteraction) {
     await i.reply({ embeds: [okEmbed("Skelly description updated.")], flags: 64 }); return;
   }
 
-  if (customId === "mod_skelly_ticket") {
+  if (customId === "mod_skelly_buy" || customId === "mod_skelly_sell") {
+    const isBuying = customId === "mod_skelly_buy";
     const { guild } = i;
     if (!guild) return;
 
-    const selling = i.fields.getTextInputValue("selling").trim();
-    const buying = i.fields.getTextInputValue("buying").trim();
-    const description = i.fields.getTextInputValue("description").trim();
+    const spawner = i.fields.getTextInputValue("spawner").trim();
+    const amount  = i.fields.getTextInputValue("amount").trim();
+    const details = i.fields.getTextInputValue("details").trim();
 
     const existingId = storage.hasOpenTicket(user.id, "skellys", guild.id);
     if (existingId && guild.channels.cache.get(existingId)) {
@@ -1976,13 +2013,14 @@ async function handleModal(i: ModalSubmitInteraction) {
     }
 
     const ticketNum = storage.nextTicketNumber();
-    const safeName = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+    const safeName  = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "user";
+    const prefix    = isBuying ? "buy" : "sell";
 
     const ticketChannel = await guild.channels.create({
-      name: `skelly-${safeName}`,
+      name: `skelly-${prefix}-${safeName}`,
       type: ChannelType.GuildText,
       parent: discordCategory.id,
-      topic: `Ticket ${ticketTag(ticketNum)} | Buy/Sell Skellys | ${user.tag}`,
+      topic: `Ticket ${ticketTag(ticketNum)} | ${isBuying ? "Buying" : "Selling"} Spawners | ${user.tag}`,
       permissionOverwrites: [
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         {
@@ -2001,19 +2039,19 @@ async function handleModal(i: ModalSubmitInteraction) {
     });
 
     const welcomeFields: { name: string; value: string; inline: boolean }[] = [
-      { name: "Opened by", value: `<@${user.id}>`, inline: true },
-      { name: "Ticket",    value: ticketTag(ticketNum), inline: true },
-      { name: "Opened",    value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+      { name: "Opened by",                              value: `<@${user.id}>`,                         inline: true  },
+      { name: "Ticket",                                 value: ticketTag(ticketNum),                     inline: true  },
+      { name: "Type",                                   value: isBuying ? "Buying" : "Selling",          inline: true  },
+      { name: "Spawner",                                value: spawner,                                  inline: true  },
+      { name: isBuying ? "Amount wanted" : "Amount",   value: amount,                                   inline: true  },
+      { name: "Opened",                                 value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
     ];
-    if (selling) welcomeFields.push({ name: "Selling", value: selling, inline: true });
-    if (buying)  welcomeFields.push({ name: "Buying",  value: buying,  inline: true });
-    if (description) welcomeFields.push({ name: "Details", value: description, inline: false });
+    if (details) welcomeFields.push({ name: "Details", value: details, inline: false });
 
-    const customMsg = storage.getCategoryMessage("skellys") ?? SKELLY_CATEGORY.description;
     const welcomeEmbed = new EmbedBuilder()
       .setColor(SKELLY_CATEGORY.color)
-      .setTitle(`Buy/Sell Skellys — ${ticketTag(ticketNum)}`)
-      .setDescription(`${customMsg}\n\nYou can see current prices in <#1518633695404101773> — [click here](${SKELLY_PRICE_CHANNEL})`)
+      .setTitle(`${isBuying ? "Buying" : "Selling"} Spawners — ${ticketTag(ticketNum)}`)
+      .setDescription(`${SKELLY_PRICE_TEXT}\n\nSee <#1518633695404101773> for more info — [click here](${SKELLY_PRICE_CHANNEL})`)
       .addFields(...welcomeFields)
       .setTimestamp();
 
@@ -2038,11 +2076,12 @@ async function handleModal(i: ModalSubmitInteraction) {
     if (logCh) {
       const joinEmbed = new EmbedBuilder()
         .setColor(SKELLY_CATEGORY.color)
-        .setTitle("New Skelly Ticket")
+        .setTitle(`New Skelly Ticket — ${isBuying ? "Buying" : "Selling"}`)
         .addFields(
-          { name: "✅ Opened By", value: `<@${user.id}>`, inline: true },
-          { name: "🔵 Panel",     value: SKELLY_CATEGORY.label, inline: true },
-          { name: "📋 Ticket",   value: ticketTag(ticketNum), inline: true },
+          { name: "✅ Opened By", value: `<@${user.id}>`,           inline: true },
+          { name: "🧱 Spawner",  value: spawner,                    inline: true },
+          { name: "🔢 Amount",   value: amount,                     inline: true },
+          { name: "📋 Ticket",   value: ticketTag(ticketNum),       inline: true },
         )
         .setTimestamp();
       const joinRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -2296,27 +2335,36 @@ function ticketPanelComponents() {
 
 const SKELLY_PRICE_CHANNEL = "https://discord.com/channels/1450662191890956322/1518633695404101773";
 
+const SKELLY_PRICE_TEXT = [
+  "**Buying:**",
+  "💀 Skeleton — 3.2m each",
+  "💚 Creeper — 5m each",
+  "🐷 Zombified Piglin — 4m each",
+  "⚙️ Iron Golem — 5m each",
+  "",
+  "**Selling:**",
+  "💀 Skeleton — 3.8m each",
+  "💚 Creeper — 8m each",
+  "⚙️ Iron Golem — 10m each",
+  "",
+  "**Notes:**",
+  "Our prices are possibly negotiable",
+  "5x5 minimum",
+  "32 spawner minimum",
+].join("\n");
+
 function skellyTicketPanelEmbed() {
-  const data = storage.getData();
-  const desc = data.skellyDescription || SKELLY_CATEGORY.description;
   return new EmbedBuilder()
     .setColor(SKELLY_CATEGORY.color)
-    .setTitle("Buy/Sell Skellys")
-    .setDescription(`${desc}\n\nYou can see current prices in <#1518633695404101773> — [click here](${SKELLY_PRICE_CHANNEL})`)
+    .setTitle("Spawner Prices")
+    .setDescription(`${SKELLY_PRICE_TEXT}\n\nSee <#1518633695404101773> for more details.\nOpen a ticket below to buy or sell.`)
     .setTimestamp();
 }
 
 function skellyTicketComponents() {
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("sel_skelly_topic")
-    .setPlaceholder("Open a Skelly Ticket")
-    .addOptions(
-      new StringSelectMenuOptionBuilder()
-        .setLabel("Buy/Sell Skellys")
-        .setValue("skellys")
-        .setDescription("Open a skelly transaction ticket"),
-    );
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  const buyBtn = new ButtonBuilder().setCustomId("skelly_buy").setLabel("Buy Spawners").setStyle(ButtonStyle.Success);
+  const sellBtn = new ButtonBuilder().setCustomId("skelly_sell").setLabel("Sell Spawners").setStyle(ButtonStyle.Primary);
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(buyBtn, sellBtn)];
 }
 
 function farmTicketPanelEmbed() {

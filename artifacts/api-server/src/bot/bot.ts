@@ -1682,6 +1682,22 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
       modal.addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
+            .setCustomId("which_schematic")
+            .setLabel("Which server schematic do you want?")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("e.g. Skeleton Farm, Creeper Farm...")
+            .setRequired(true),
+        ),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId("mined_space")
+            .setLabel("Do you have a mined out space? (Yes/No)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("If No, it costs 1,000 per block mined")
+            .setRequired(true),
+        ),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
             .setCustomId("due_date")
             .setLabel("When is it due?")
             .setStyle(TextInputStyle.Short)
@@ -1703,6 +1719,14 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
             .setLabel("How much are you willing to spend?")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("e.g. $500, negotiable, open to offers")
+            .setRequired(true),
+        ),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId("mined_space")
+            .setLabel("Do you have a mined out space? (Yes/No)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("If No, it costs 1,000 per block mined")
             .setRequired(true),
         ),
         new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -1828,9 +1852,11 @@ async function handleModal(i: ModalSubmitInteraction) {
     const { guild } = i;
     if (!guild) return;
 
-    const isCustom = customId === "mod_farm_custom";
-    const dueDate  = i.fields.getTextInputValue("due_date");
-    const budget   = isCustom ? i.fields.getTextInputValue("budget") : null;
+    const isCustom       = customId === "mod_farm_custom";
+    const dueDate        = i.fields.getTextInputValue("due_date");
+    const budget         = isCustom ? i.fields.getTextInputValue("budget") : null;
+    const whichSchematic = !isCustom ? i.fields.getTextInputValue("which_schematic") : null;
+    const minedSpace     = i.fields.getTextInputValue("mined_space");
 
     const existingId = storage.hasOpenTicket(user.id, "buy-farms", guild.id);
     if (existingId && guild.channels.cache.get(existingId)) {
@@ -1883,11 +1909,15 @@ async function handleModal(i: ModalSubmitInteraction) {
 
     const schematicType = isCustom ? "Custom Schematic" : "Server Schematic";
     const welcomeFields: { name: string; value: string; inline: boolean }[] = [
-      { name: "Opened by",       value: `<@${user.id}>`,                     inline: true },
-      { name: "Ticket",          value: ticketTag(ticketNum),                 inline: true },
-      { name: "Schematic Type",  value: schematicType,                        inline: true },
-      { name: "Due Date",        value: dueDate,                              inline: true },
+      { name: "Opened by",      value: `<@${user.id}>`,    inline: true },
+      { name: "Ticket",         value: ticketTag(ticketNum), inline: true },
+      { name: "Schematic Type", value: schematicType,        inline: true },
     ];
+    if (whichSchematic) {
+      welcomeFields.push({ name: "Schematic",    value: whichSchematic, inline: true });
+    }
+    welcomeFields.push({ name: "Mined Out Space", value: `${minedSpace} — (If No: 1,000 per block mined)`, inline: true });
+    welcomeFields.push({ name: "Due Date",         value: dueDate,                                          inline: true });
     if (isCustom && budget) {
       welcomeFields.push({ name: "Budget", value: budget, inline: true });
     }

@@ -14,6 +14,16 @@ export interface TicketEntry {
   joinedStaff?: string[];
 }
 
+export interface SuggestionEntry {
+  messageId: string;
+  channelId: string;
+  guildId: string;
+  authorId: string;
+  text: string;
+  createdAt: string;
+  forwarded: boolean;
+}
+
 export interface StickerEntry {
   id: string;
   channelId: string;
@@ -53,6 +63,9 @@ interface BotData {
   ticketPanelDesc: string;
   giveaways: Record<string, GiveawayEntry>;
   stickers: Record<string, StickerEntry>;
+  suggestions: Record<string, SuggestionEntry>;
+  suggestionChannelId: string | null;
+  topSuggestionsChannelId: string | null;
 }
 
 const DATA_FILE = path.resolve(process.cwd(), "bot-data.json");
@@ -74,6 +87,9 @@ function defaultData(): BotData {
       "Need help or have a question? Click one of the buttons below to open a ticket. Our staff will assist you as soon as possible.",
     giveaways: {},
     stickers: {},
+    suggestions: {},
+    suggestionChannelId: null,
+    topSuggestionsChannelId: null,
   };
 }
 

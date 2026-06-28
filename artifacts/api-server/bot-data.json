@@ -285,5 +285,15 @@
       },
       "type": "normal"
     }
+  },
+  "stickers": {
+    "stk_mqy6qutr": {
+      "id": "stk_mqy6qutr",
+      "channelId": "1518633712747548743",
+      "guildId": "1450662191890956322",
+      "messageId": "1520874474721775766",
+      "text": "# You need atleast 50 vouches to post in this channel, if you have over 50 make a support ticket for the role.",
+      "createdAt": "2026-06-28T19:32:11.535Z"
+    }
   }
 }

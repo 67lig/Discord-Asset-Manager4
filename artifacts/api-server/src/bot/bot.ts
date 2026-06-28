@@ -359,6 +359,28 @@ export function createBotClient(): Client | null {
     handleInteraction(i).catch((e) => logger.error({ err: e }, "Interaction error"));
   });
 
+  // ─── Vouch Channel Format Enforcer ─────────────────────────────────────────
+  const VOUCH_CHANNEL_ID = "1503988954490470461";
+  // Valid: (scam vouch|scamvouch|vouch) @mention <reason>
+  const VOUCH_REGEX = /^(scam\s*vouch|vouch)\s+<@!?\d+>\s+\S+/i;
+
+  client.on("messageCreate", (msg) => {
+    if (msg.channelId !== VOUCH_CHANNEL_ID) return;
+    if (msg.author.bot) return;
+    if (!VOUCH_REGEX.test(msg.content.trim())) {
+      msg.delete().catch(() => {});
+      msg.author
+        .send(
+          `❌ Your message in <#${VOUCH_CHANNEL_ID}> was removed because it didn't follow the correct format.\n\n` +
+          `**Correct formats:**\n` +
+          `\`vouch @member reason\`\n` +
+          `\`scam vouch @member reason\`\n` +
+          `\`scamvouch @member reason\``,
+        )
+        .catch(() => {});
+    }
+  });
+
   client.login(TOKEN).catch((e) => logger.error({ err: e }, "Login failed"));
   return client;
 }

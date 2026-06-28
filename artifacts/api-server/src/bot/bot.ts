@@ -1376,7 +1376,7 @@ async function handleButton(i: ButtonInteraction) {
     if (!isStaff(member) && !isFarmBuilder && !isSkellyStaff) {
       await i.reply({ embeds: [errEmbed("You don't have permission to claim this ticket.")], flags: 64 }); return;
     }
-    if (ticket.claimedById) {
+    if (ticket.claimedById && !isOwner(user.id)) {
       await i.reply({ embeds: [errEmbed(`This ticket is already claimed by <@${ticket.claimedById}>.`)], flags: 64 }); return;
     }
     storage.claimTicket(i.channel.id, user.username, user.id);

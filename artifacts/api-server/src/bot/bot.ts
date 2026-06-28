@@ -150,7 +150,7 @@ function buildGiveawayEndedEmbed(gw: GiveawayEntry): EmbedBuilder {
   if (gw.description) desc += `\n\n${gw.description}`;
   return new EmbedBuilder()
     .setColor(0x747f8d)
-    .setTitle(`${gw.prize} — Ended`)
+    .setTitle(`${gw.prize} - Ended`)
     .setDescription(desc)
     .setFooter({ text: `Giveaway • ID: ${gw.id}` })
     .setTimestamp(new Date(gw.endTime));
@@ -306,11 +306,11 @@ async function expireGiveawayClaims(giveawayId: string) {
 
 export function createBotClient(): Client | null {
   if (!TOKEN) {
-    logger.warn("DISCORD_BOT_TOKEN not set — bot disabled. Set the secret to enable it.");
+    logger.warn("DISCORD_BOT_TOKEN not set, bot disabled. Set the secret to enable it.");
     return null;
   }
   if (!DONUTSMP_API_KEY) {
-    logger.warn("DONUTSMP_API_KEY not set — /stats command will not work.");
+    logger.warn("DONUTSMP_API_KEY not set, /stats command will not work.");
   }
 
   const client = new Client({
@@ -541,12 +541,12 @@ async function closeTicket(
     .setColor(SUCCESS_COLOR)
     .setTitle("Ticket Closed")
     .addFields(
-      { name: "# Ticket ID",     value: `${ticket.ticketNumber}`,                                        inline: true },
-      { name: "✅ Opened By",    value: `<@${ticket.userId}>`,                                           inline: true },
-      { name: "🔴 Closed By",   value: `<@${closedById}>`,                                              inline: true },
-      { name: "⏰ Open Time",    value: `<t:${openedTs}:F>`,                                             inline: true },
-      { name: "👤 Claimed By",   value: ticket.claimedById ? `<@${ticket.claimedById}>` : "Not claimed", inline: true },
-      { name: "❓ Reason",       value: reason },
+      { name: "Ticket ID",    value: `${ticket.ticketNumber}`,                                        inline: true },
+      { name: "Opened By",   value: `<@${ticket.userId}>`,                                           inline: true },
+      { name: "Closed By",   value: `<@${closedById}>`,                                              inline: true },
+      { name: "Open Time",   value: `<t:${openedTs}:F>`,                                             inline: true },
+      { name: "Claimed By",  value: ticket.claimedById ? `<@${ticket.claimedById}>` : "Not claimed", inline: true },
+      { name: "Reason",      value: reason },
     )
     
     .setTimestamp();
@@ -816,7 +816,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
       const eligible = pool.length > 0 ? pool : gw.entries;
       const newWinner = eligible[Math.floor(Math.random() * eligible.length)];
       const ch = i.channel as TextChannel;
-      await ch.send({ content: `Reroll — Congratulations <@${newWinner}>, you won **${gw.prize}**!` });
+      await ch.send({ content: `Reroll: Congratulations <@${newWinner}>, you won **${gw.prize}**!` });
       await i.editReply({ embeds: [new EmbedBuilder().setColor(BOT_COLOR).setDescription(`New winner: <@${newWinner}>`)] });
       return;
     }
@@ -854,13 +854,13 @@ async function handleCommand(i: ChatInputCommandInteraction) {
     const list = storage.getTicketsByGuild(guild.id);
     const embed = new EmbedBuilder()
       .setColor(BOT_COLOR)
-      .setTitle(`Active Tickets — ${list.length} open`)
+      .setTitle(`Active Tickets: ${list.length} open`)
       .setDescription(
         list.length === 0
           ? "No open tickets."
           : list.slice(0, 25).map((t) => {
               const cat = ALL_CATEGORIES.find((c) => c.id === t.categoryId);
-              return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> — ${cat?.label ?? t.categoryId} — <@${t.userId}>`;
+              return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> - ${cat?.label ?? t.categoryId} - <@${t.userId}>`;
             }).join("\n"),
       )
       
@@ -1100,14 +1100,14 @@ async function handleButton(i: ButtonInteraction) {
 
     const claimEmbed = new EmbedBuilder()
       .setColor(SUCCESS_COLOR)
-      .setTitle(`Giveaway Claim — ${ticketTag(ticketNum)}`)
+      .setTitle(`Giveaway Claim: ${ticketTag(ticketNum)}`)
       .setDescription("Welcome! Staff will process your giveaway prize shortly.")
       .addFields(
-        { name: "🎉 Prize",        value: gw.prize,             inline: true },
-        { name: "👤 Winner",       value: `<@${user.id}>`,      inline: true },
-        { name: "🎲 Giveaway ID",  value: `\`${gw.id}\``,       inline: true },
+        { name: "Prize",       value: gw.prize,             inline: true },
+        { name: "Winner",      value: `<@${user.id}>`,      inline: true },
+        { name: "Giveaway ID", value: `\`${gw.id}\``,       inline: true },
         ...(claimExpiry
-          ? [{ name: "⏰ Claim Expires", value: `<t:${claimExpiry}:R>`, inline: true }]
+          ? [{ name: "Claim Expires", value: `<t:${claimExpiry}:R>`, inline: true }]
           : []),
       )
       
@@ -1407,7 +1407,7 @@ async function handleButton(i: ButtonInteraction) {
       const online = g.members.cache.filter((m) => m.presence?.status !== "offline" && !!m.presence?.status).size;
       const embed = new EmbedBuilder()
         .setColor(BOT_COLOR)
-        .setTitle(`Server Monitor — ${g.name}`)
+        .setTitle(`Server Monitor: ${g.name}`)
         .setThumbnail(g.iconURL())
         .addFields(
           { name: "Members", value: `${g.memberCount}`, inline: true },
@@ -1522,13 +1522,13 @@ async function handleButton(i: ButtonInteraction) {
       const list = storage.getTicketsByGuild(guild.id);
       const embed = new EmbedBuilder()
         .setColor(BOT_COLOR)
-        .setTitle(`Active Tickets — ${list.length} open`)
+        .setTitle(`Active Tickets: ${list.length} open`)
         .setDescription(
           list.length === 0
             ? "No open tickets."
             : list.slice(0, 20).map((t) => {
                 const cat = ALL_CATEGORIES.find((c) => c.id === t.categoryId);
-                return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> — ${cat?.label ?? t.categoryId} — <@${t.userId}> — <t:${Math.floor(new Date(t.createdAt).getTime() / 1000)}:R>`;
+                return `**${ticketTag(t.ticketNumber)}** <#${t.channelId}> - ${cat?.label ?? t.categoryId} - <@${t.userId}> - <t:${Math.floor(new Date(t.createdAt).getTime() / 1000)}:R>`;
               }).join("\n"),
         )
         
@@ -1663,7 +1663,7 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
       embeds: [
         new EmbedBuilder()
           .setColor(GOLD_COLOR)
-          .setTitle("Buy Farms — Schematic Type")
+          .setTitle("Buy Farms: Schematic Type")
           .setDescription("Will you be using a **server schematic** or providing a **custom schematic**?")
           ,
       ],
@@ -1678,14 +1678,14 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
     if (schematic === "server") {
       const modal = new ModalBuilder()
         .setCustomId("mod_farm_server")
-        .setTitle("Buy Farms — Server Schematic");
+        .setTitle("Buy Farms: Server Schematic");
       modal.addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
             .setCustomId("which_schematic")
             .setLabel("Which server schematic do you want?")
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g. Skeleton Farm, Creeper Farm...")
+            .setPlaceholder("e.g. Bone Block Farm, Cobble Farm...")
             .setRequired(true),
         ),
         new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -1711,7 +1711,7 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
     if (schematic === "custom") {
       const modal = new ModalBuilder()
         .setCustomId("mod_farm_custom")
-        .setTitle("Buy Farms — Custom Schematic");
+        .setTitle("Buy Farms: Custom Schematic");
       modal.addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
@@ -1916,7 +1916,7 @@ async function handleModal(i: ModalSubmitInteraction) {
     if (whichSchematic) {
       welcomeFields.push({ name: "Schematic",    value: whichSchematic, inline: true });
     }
-    welcomeFields.push({ name: "Mined Out Space", value: `${minedSpace} — (If No: 1,000 per block mined)`, inline: true });
+    welcomeFields.push({ name: "Mined Out Space", value: `${minedSpace} (If No: 1,000 per block mined)`, inline: true });
     welcomeFields.push({ name: "Due Date",         value: dueDate,                                          inline: true });
     if (isCustom && budget) {
       welcomeFields.push({ name: "Budget", value: budget, inline: true });
@@ -1925,7 +1925,7 @@ async function handleModal(i: ModalSubmitInteraction) {
     const customMsg = storage.getCategoryMessage("buy-farms") ?? FARM_CATEGORY.description;
     const welcomeEmbed = new EmbedBuilder()
       .setColor(SUCCESS_COLOR)
-      .setTitle(`Buy Farms — ${ticketTag(ticketNum)}`)
+      .setTitle(`Buy Farms: ${ticketTag(ticketNum)}`)
       .setDescription(customMsg)
       .addFields(...welcomeFields)
       
@@ -2080,8 +2080,8 @@ async function handleModal(i: ModalSubmitInteraction) {
 
     const welcomeEmbed = new EmbedBuilder()
       .setColor(SKELLY_CATEGORY.color)
-      .setTitle(`${isBuying ? "Buying" : "Selling"} Spawners — ${ticketTag(ticketNum)}`)
-      .setDescription(`${SKELLY_PRICE_TEXT}\n\nSee <#1518633695404101773> for more info — [click here](${SKELLY_PRICE_CHANNEL})`)
+      .setTitle(`${isBuying ? "Buying" : "Selling"} Spawners: ${ticketTag(ticketNum)}`)
+      .setDescription(`${SKELLY_PRICE_TEXT}\n\nSee <#1518633695404101773> for more info - [click here](${SKELLY_PRICE_CHANNEL})`)
       .addFields(...welcomeFields)
       .setTimestamp();
 
@@ -2106,12 +2106,12 @@ async function handleModal(i: ModalSubmitInteraction) {
     if (logCh) {
       const joinEmbed = new EmbedBuilder()
         .setColor(SKELLY_CATEGORY.color)
-        .setTitle(`New Skelly Ticket — ${isBuying ? "Buying" : "Selling"}`)
+        .setTitle(`New Skelly Ticket: ${isBuying ? "Buying" : "Selling"}`)
         .addFields(
-          { name: "✅ Opened By", value: `<@${user.id}>`,           inline: true },
-          { name: "🧱 Spawner",  value: spawner,                    inline: true },
-          { name: "🔢 Amount",   value: amount,                     inline: true },
-          { name: "📋 Ticket",   value: ticketTag(ticketNum),       inline: true },
+          { name: "Opened By", value: `<@${user.id}>`,           inline: true },
+          { name: "Spawner",   value: spawner,                    inline: true },
+          { name: "Amount",    value: amount,                     inline: true },
+          { name: "Ticket",    value: ticketTag(ticketNum),       inline: true },
         )
         .setTimestamp();
       const joinRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -2243,7 +2243,7 @@ async function handleTicketCreate(
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor(cat.color)
-    .setTitle(`${cat.label} — ${ticketTag(ticketNum)}`)
+    .setTitle(`${cat.label}: ${ticketTag(ticketNum)}`)
     .setDescription(customMsg)
     .addFields(
       { name: "Opened by", value: `<@${user.id}>`, inline: true },
@@ -2367,14 +2367,14 @@ const SKELLY_PRICE_CHANNEL = "https://discord.com/channels/1450662191890956322/1
 
 const SKELLY_PRICE_TEXT = [
   "**Buying:**",
-  "Skeleton — 3.3m each",
-  "Creeper — 3.3m each",
-  "Iron Golem — 5.5m each",
+  "Skeleton: 3.3m each",
+  "Creeper: 3.3m each",
+  "Iron Golem: 5.5m each",
   "",
   "**Selling:**",
-  "Skeleton — 3.9m each",
-  "Creeper — 8m each",
-  "Iron Golem — 9m each",
+  "Skeleton: 3.9m each",
+  "Creeper: 8m each",
+  "Iron Golem: 9m each",
   "",
   "**Notes:**",
   "Our prices are possibly negotiable",

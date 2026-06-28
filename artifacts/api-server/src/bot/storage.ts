@@ -73,7 +73,7 @@ function loadData(): BotData {
     const parsed = JSON.parse(raw) as Partial<BotData>;
     return { ...defaultData(), ...parsed };
   } catch (err) {
-    console.error("[storage] Failed to parse bot-data.json — attempting backup restore:", err);
+    console.error("[storage] Failed to parse bot-data.json - attempting backup restore:", err);
     const backup = DATA_FILE + ".bak";
     if (fs.existsSync(backup)) {
       try {
@@ -82,7 +82,7 @@ function loadData(): BotData {
         console.error("[storage] Restored from backup successfully.");
         return { ...defaultData(), ...parsed };
       } catch {
-        console.error("[storage] Backup also unreadable — starting with empty data.");
+        console.error("[storage] Backup also unreadable - starting with empty data.");
       }
     }
     return defaultData();

@@ -364,21 +364,46 @@ export function createBotClient(): Client | null {
   // Valid: (scam vouch|scamvouch|vouch) @mention <reason>
   const VOUCH_REGEX = /^(scam\s*vouch|vouch)\s+<@!?\d+>\s+\S+/i;
 
+  // Per-channel cooldown so we don't spam repost if multiple messages arrive fast
+  const stickyBusy = new Set<string>();
+
   client.on("messageCreate", (msg) => {
-    if (msg.channelId !== VOUCH_CHANNEL_ID) return;
-    if (msg.author.bot) return;
-    if (!VOUCH_REGEX.test(msg.content.trim())) {
-      msg.delete().catch(() => {});
-      msg.author
-        .send(
-          `❌ Your message in <#${VOUCH_CHANNEL_ID}> was removed because it didn't follow the correct format.\n\n` +
-          `**Correct formats:**\n` +
-          `\`vouch @member reason\`\n` +
-          `\`scam vouch @member reason\`\n` +
-          `\`scamvouch @member reason\``,
-        )
-        .catch(() => {});
+    // ── Vouch enforcer ──
+    if (msg.channelId === VOUCH_CHANNEL_ID && !msg.author.bot) {
+      if (!VOUCH_REGEX.test(msg.content.trim())) {
+        msg.delete().catch(() => {});
+        msg.author
+          .send(
+            `❌ Your message in <#${VOUCH_CHANNEL_ID}> was removed because it didn't follow the correct format.\n\n` +
+            `**Correct formats:**\n` +
+            `\`vouch @member reason\`\n` +
+            `\`scam vouch @member reason\`\n` +
+            `\`scamvouch @member reason\``,
+          )
+          .catch(() => {});
+      }
     }
+
+    // ── Sticky repost ──
+    if (msg.author.bot) return;
+    const channelStickers = storage.getStickersForChannel(msg.channelId);
+    if (channelStickers.length === 0) return;
+    if (stickyBusy.has(msg.channelId)) return;
+    stickyBusy.add(msg.channelId);
+    void (async () => {
+      try {
+        const ch = msg.channel as TextChannel;
+        for (const sticker of channelStickers) {
+          await ch.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
+          const newMsg = await ch.send({
+            embeds: [new EmbedBuilder().setDescription(sticker.text).setColor(0x2b2d31)],
+          });
+          storage.replaceStickerMessage(sticker.messageId, newMsg.id);
+        }
+      } finally {
+        stickyBusy.delete(msg.channelId);
+      }
+    })();
   });
 
   client.login(TOKEN).catch((e) => logger.error({ err: e }, "Login failed"));
@@ -990,10 +1015,10 @@ async function handleCommand(i: ChatInputCommandInteraction) {
     if (sub === "post") {
       const text = i.options.getString("text", true);
       await i.deferReply({ flags: 64 });
-      const msg = await (channel as TextChannel).send({ content: text });
-      const stickerId = `stk_${Date.now().toString(36)}`;
+      const msg = await (channel as TextChannel).send({
+        embeds: [new EmbedBuilder().setDescription(text).setColor(0x2b2d31)],
+      });
       storage.addSticker({
-        id: stickerId,
         channelId: channel.id,
         guildId: guild.id,
         messageId: msg.id,
@@ -1004,38 +1029,48 @@ async function handleCommand(i: ChatInputCommandInteraction) {
         embeds: [
           new EmbedBuilder()
             .setColor(SUCCESS_COLOR)
-            .setDescription(`Sticker posted.\n**ID:** \`${stickerId}\``),
+            .setDescription(`📌 Sticker posted.\n**Message ID:** \`${msg.id}\``),
         ],
       });
       return;
     }
 
     if (sub === "edit") {
-      const stickerId = i.options.getString("id", true).trim();
+      const msgId = i.options.getString("id", true).trim();
       const newText = i.options.getString("text", true);
-      const sticker = storage.getSticker(stickerId);
+      const sticker = storage.getSticker(msgId);
       if (!sticker) {
-        await i.reply({ embeds: [errEmbed(`No sticker found with ID \`${stickerId}\`.`)], flags: 64 });
+        await i.reply({ embeds: [errEmbed(`No sticker found with message ID \`${msgId}\`.`)], flags: 64 });
         return;
       }
       await i.deferReply({ flags: 64 });
       const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
       if (stickerCh) {
         await stickerCh.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
-        const newMsg = await stickerCh.send({ content: newText });
-        storage.updateStickerMessage(stickerId, newMsg.id, newText);
+        const newMsg = await stickerCh.send({
+          embeds: [new EmbedBuilder().setDescription(newText).setColor(0x2b2d31)],
+        });
+        storage.updateStickerText(newMsg.id, newText);
+        storage.replaceStickerMessage(msgId, newMsg.id);
+        await i.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(SUCCESS_COLOR)
+              .setDescription(`📌 Sticker updated.\n**New Message ID:** \`${newMsg.id}\``),
+          ],
+        });
       } else {
-        storage.updateStickerText(stickerId, newText);
+        storage.updateStickerText(msgId, newText);
+        await i.editReply({ embeds: [okEmbed("Sticker text updated.")] });
       }
-      await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` updated.`)] });
       return;
     }
 
     if (sub === "delete") {
-      const stickerId = i.options.getString("id", true).trim();
-      const sticker = storage.deleteSticker(stickerId);
+      const msgId = i.options.getString("id", true).trim();
+      const sticker = storage.deleteSticker(msgId);
       if (!sticker) {
-        await i.reply({ embeds: [errEmbed(`No sticker found with ID \`${stickerId}\`.`)], flags: 64 });
+        await i.reply({ embeds: [errEmbed(`No sticker found with message ID \`${msgId}\`.`)], flags: 64 });
         return;
       }
       await i.deferReply({ flags: 64 });
@@ -1045,7 +1080,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
           await stickerCh.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
         }
       } catch {}
-      await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` deleted.`)] });
+      await i.editReply({ embeds: [okEmbed(`Sticker deleted.`)] });
       return;
     }
 
@@ -1056,7 +1091,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
         return;
       }
       const lines = stickers.map(
-        (s) => `**\`${s.id}\`** — ${s.text.slice(0, 80)}${s.text.length > 80 ? "…" : ""} ([jump](https://discord.com/channels/${s.guildId}/${s.channelId}/${s.messageId}))`,
+        (s) => `\`${s.messageId}\` — ${s.text.slice(0, 80)}${s.text.length > 80 ? "…" : ""}`,
       );
       await i.reply({
         embeds: [

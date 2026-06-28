@@ -15,7 +15,6 @@ export interface TicketEntry {
 }
 
 export interface StickerEntry {
-  id: string;
   channelId: string;
   guildId: string;
   messageId: string;
@@ -284,12 +283,12 @@ export const storage = {
 
   addSticker(sticker: StickerEntry) {
     if (!_data.stickers) _data.stickers = {};
-    _data.stickers[sticker.id] = sticker;
+    _data.stickers[sticker.messageId] = sticker;
     saveData(_data);
   },
 
-  getSticker(id: string): StickerEntry | undefined {
-    return _data.stickers?.[id];
+  getSticker(messageId: string): StickerEntry | undefined {
+    return _data.stickers?.[messageId];
   },
 
   getStickersForChannel(channelId: string): StickerEntry[] {
@@ -297,27 +296,28 @@ export const storage = {
     return Object.values(_data.stickers).filter((s) => s.channelId === channelId);
   },
 
-  updateStickerText(id: string, text: string): boolean {
-    const s = _data.stickers?.[id];
+  replaceStickerMessage(oldMessageId: string, newMessageId: string): boolean {
+    const s = _data.stickers?.[oldMessageId];
+    if (!s) return false;
+    delete _data.stickers[oldMessageId];
+    s.messageId = newMessageId;
+    _data.stickers[newMessageId] = s;
+    saveData(_data);
+    return true;
+  },
+
+  updateStickerText(messageId: string, text: string): boolean {
+    const s = _data.stickers?.[messageId];
     if (!s) return false;
     s.text = text;
     saveData(_data);
     return true;
   },
 
-  updateStickerMessage(id: string, messageId: string, text: string): boolean {
-    const s = _data.stickers?.[id];
-    if (!s) return false;
-    s.messageId = messageId;
-    s.text = text;
-    saveData(_data);
-    return true;
-  },
-
-  deleteSticker(id: string): StickerEntry | undefined {
-    const s = _data.stickers?.[id];
+  deleteSticker(messageId: string): StickerEntry | undefined {
+    const s = _data.stickers?.[messageId];
     if (!s) return undefined;
-    delete _data.stickers[id];
+    delete _data.stickers[messageId];
     saveData(_data);
     return s;
   },

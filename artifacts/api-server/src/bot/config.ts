@@ -50,6 +50,15 @@ export const REGULAR_CATEGORIES: TicketCategory[] = [
     channelPrefix: "giveaway",
     discordCategoryName: "Giveaway Support Tickets",
   },
+  {
+    id: "skellys",
+    label: "Buy/Sell Skellys",
+    description:
+      "For purchasing or selling Skelly Spawners. You can view current prices in <#1518633695404101773> before opening a ticket.",
+    color: 0x5865f2,
+    channelPrefix: "skelly",
+    discordCategoryName: "Skelly Tickets",
+  },
 ];
 
 export const SKELLY_CATEGORY: TicketCategory = {

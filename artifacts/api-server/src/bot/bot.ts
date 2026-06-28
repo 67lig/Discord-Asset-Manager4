@@ -1551,6 +1551,32 @@ async function handleStringSelect(i: StringSelectMenuInteraction) {
   const { customId, values, user, guild } = i;
 
   if (customId === "sel_ticket_topic") {
+    if (values[0] === "skellys") {
+      if (!guild) return;
+      const existingId = storage.hasOpenTicket(user.id, "skellys", guild.id);
+      if (existingId && guild.channels.cache.get(existingId)) {
+        await i.reply({
+          embeds: [new EmbedBuilder().setColor(WARNING_COLOR).setDescription(`You already have an open skelly ticket: <#${existingId}>`)],
+          flags: 64,
+        });
+        return;
+      }
+      if (existingId) storage.removeTicket(existingId);
+      const modal = new ModalBuilder().setCustomId("mod_skelly_ticket").setTitle("Buy/Sell Skellys");
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder().setCustomId("selling").setLabel("How much are you selling?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 5 Skelly Spawners — leave blank if not selling"),
+        ),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder().setCustomId("buying").setLabel("How much are you buying?").setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder("e.g. 3 Skelly Spawners — leave blank if not buying"),
+        ),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder().setCustomId("description").setLabel("Additional details").setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder("Price offers, IGN, anything else relevant..."),
+        ),
+      );
+      await i.showModal(modal);
+      return;
+    }
     await handleTicketCreate(i, values[0]!, false);
     return;
   }
@@ -1987,7 +2013,7 @@ async function handleModal(i: ModalSubmitInteraction) {
     const welcomeEmbed = new EmbedBuilder()
       .setColor(SKELLY_CATEGORY.color)
       .setTitle(`Buy/Sell Skellys — ${ticketTag(ticketNum)}`)
-      .setDescription(customMsg)
+      .setDescription(`${customMsg}\n\nYou can see current prices in <#1518633695404101773> — [click here](${SKELLY_PRICE_CHANNEL})`)
       .addFields(...welcomeFields)
       .setTimestamp();
 
@@ -2268,13 +2294,15 @@ function ticketPanelComponents() {
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
+const SKELLY_PRICE_CHANNEL = "https://discord.com/channels/1450662191890956322/1518633695404101773";
+
 function skellyTicketPanelEmbed() {
   const data = storage.getData();
   const desc = data.skellyDescription || SKELLY_CATEGORY.description;
   return new EmbedBuilder()
     .setColor(SKELLY_CATEGORY.color)
     .setTitle("Buy/Sell Skellys")
-    .setDescription(desc)
+    .setDescription(`${desc}\n\nYou can see current prices in <#1518633695404101773> — [click here](${SKELLY_PRICE_CHANNEL})`)
     .setTimestamp();
 }
 

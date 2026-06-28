@@ -423,7 +423,7 @@ async function registerCommands(client: Client) {
       ),
     new SlashCommandBuilder()
       .setName("sticker")
-      .setDescription("Manage pinned sticker messages in a channel")
+      .setDescription("Manage sticker messages in a channel")
       .addSubcommand((sub) =>
         sub
           .setName("post")
@@ -969,7 +969,6 @@ async function handleCommand(i: ChatInputCommandInteraction) {
       const text = i.options.getString("text", true);
       await i.deferReply({ flags: 64 });
       const msg = await (channel as TextChannel).send({ content: text });
-      await msg.pin().catch(() => {});
       const stickerId = `stk_${Date.now().toString(36)}`;
       storage.addSticker({
         id: stickerId,
@@ -983,7 +982,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
         embeds: [
           new EmbedBuilder()
             .setColor(SUCCESS_COLOR)
-            .setDescription(`Sticker posted and pinned.\n**ID:** \`${stickerId}\``),
+            .setDescription(`Sticker posted.\n**ID:** \`${stickerId}\``),
         ],
       });
       return;
@@ -998,17 +997,14 @@ async function handleCommand(i: ChatInputCommandInteraction) {
         return;
       }
       await i.deferReply({ flags: 64 });
-      try {
-        const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
-        if (stickerCh) {
-          const msg = await stickerCh.messages.fetch(sticker.messageId);
-          await msg.edit({ content: newText });
-        }
-      } catch {
-        await i.editReply({ embeds: [errEmbed("Could not find or edit the sticker message. It may have been deleted.")] });
-        return;
+      const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
+      if (stickerCh) {
+        await stickerCh.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
+        const newMsg = await stickerCh.send({ content: newText });
+        storage.updateStickerMessage(stickerId, newMsg.id, newText);
+      } else {
+        storage.updateStickerText(stickerId, newText);
       }
-      storage.updateStickerText(stickerId, newText);
       await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` updated.`)] });
       return;
     }
@@ -1024,9 +1020,7 @@ async function handleCommand(i: ChatInputCommandInteraction) {
       try {
         const stickerCh = guild.channels.cache.get(sticker.channelId) as TextChannel | undefined;
         if (stickerCh) {
-          const msg = await stickerCh.messages.fetch(sticker.messageId);
-          await msg.unpin().catch(() => {});
-          await msg.delete().catch(() => {});
+          await stickerCh.messages.fetch(sticker.messageId).then((m) => m.delete()).catch(() => {});
         }
       } catch {}
       await i.editReply({ embeds: [okEmbed(`Sticker \`${stickerId}\` deleted.`)] });
